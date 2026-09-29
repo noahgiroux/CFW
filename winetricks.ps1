@@ -157,7 +157,7 @@ function w_download_to
         Write-Host -foregroundcolor yellow "*                                                        *"
         Write-Host -foregroundcolor yellow "**********************************************************"
         
-        $LASTEXITCODE = $null
+        Get-Command wget2 -ErrorAction Stop | Out-Null
         & wget2 --restrict-file-names=nocontrol "$w_url" -O "$temporary"
         $downloadExitCode = $LASTEXITCODE
         if ($null -eq $downloadExitCode -or $downloadExitCode -ne 0) {
