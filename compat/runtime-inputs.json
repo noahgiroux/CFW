@@ -72,6 +72,9 @@
   "checkoutSources": {
     "choc_install.ps1": {
       "sha256": "de70fc77f15d08a076a6f2f47a7d66403e233d63b4a0651c3615e1dfc602315a"
+    },
+    "winetricks.ps1": {
+      "sha256": "b66d2967e9e0926460323d77da0b595333392e14ffaac11c6199346a855bffb2"
     }
   },
   "upstreamRelease": {
@@ -89,5 +92,5 @@
       "winetricks.ps1"
     ]
   },
-  "producerWineImage": "ghcr.io/pelagians/cage-wine@sha256:7ad192e00a251523f3a071d3ffa422789b010c359d18cd45227d9f89165f6b92"
+  "producerWineImage": "ghcr.io/pelagians/cage-wine@sha256:eb6a7cb5eb53f830a2659ac3784a8a0dd03637dba73f19e3d6da8d6a39bf30f0"
 }

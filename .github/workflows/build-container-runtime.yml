@@ -45,6 +45,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Test winetricks helper behavior
+        shell: pwsh
+        run: ./tests/test-winetricks-functions.ps1
       - name: Read Wine candidates
         id: contract
         shell: bash
@@ -138,6 +141,15 @@ jobs:
           fi
           if [ "$session_contract" != 'cage.selkies-wayland/v1' ]; then
             echo "::error title=Invalid Cage session contract::expected=cage.selkies-wayland/v1 actual=$session_contract image=$image_ref"
+            exit 69
+          fi
+          probe_id="$(docker create "$image_ref")"
+          probe_dir="$(mktemp -d)"
+          trap 'docker rm -f "$probe_id" >/dev/null 2>&1 || true; rm -rf "$probe_dir"' EXIT
+          if ! docker cp "$probe_id:/usr/local/bin/pelagian-shell-consumer" "$probe_dir/consumer" \
+              || ! docker cp "$probe_id:/defaults/autostart_wayland" "$probe_dir/autostart" \
+              || ! test -x "$probe_dir/consumer" || ! test -x "$probe_dir/autostart"; then
+            echo "::error title=Invalid Cage Shell hook::image lacks the executable consumer hook or Shell autostart: $image_ref"
             exit 69
           fi
 

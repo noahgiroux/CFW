@@ -347,6 +347,7 @@ cp -f "$compiled_installer" "$release_dir/$release_installer"
 printf '%s  %s\n' "$CFW_INSTALLER_SHA256" "$compiled_installer" >"$logs/installer-under-test.sha256"
 verify_checkout_source choc_install.ps1 "$repo_root/choc_install.ps1"
 cp -f "$repo_root/choc_install.ps1" "$release_dir/choc_install.ps1"
+verify_checkout_source winetricks.ps1 "$repo_root/winetricks.ps1"
 
 for input_name in chocolatey powershell dotnet mscoree d3d64 d3d32 conemu sevenZipExtractor windowsPowerShell; do
   fetch_input "$input_name" "$payload_cache/$(input_value "$input_name" filename)"
@@ -424,6 +425,13 @@ fi
     "$pwsh" "$choco" "$choco_shim" >&2
   exit 70
 }
+winetricks_script="$wine_prefix/drive_c/ProgramData/Chocolatey-for-wine/winetricks.ps1"
+[[ -f "$winetricks_script" && ! -L "$winetricks_script" ]] || {
+  echo '[cfw] installer did not provide a regular winetricks script' >&2
+  exit 70
+}
+cp -f "$repo_root/winetricks.ps1" "$winetricks_script"
+verify_checkout_source winetricks.ps1 "$winetricks_script"
 
 mark_stage prove-clr-policy
 clr_policy_key='HKCU\Software\Wine\DllOverrides'
