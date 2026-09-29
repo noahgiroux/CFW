@@ -685,7 +685,7 @@ class LayerContractTests(unittest.TestCase):
         self.assertEqual(upstream["tag"], "v0.5c.765")
         self.assertEqual(
             inputs["producerWineImage"],
-            "ghcr.io/pelagians/cage-wine@sha256:7ad192e00a251523f3a071d3ffa422789b010c359d18cd45227d9f89165f6b92",
+            "ghcr.io/pelagians/cage-wine@sha256:eb6a7cb5eb53f830a2659ac3784a8a0dd03637dba73f19e3d6da8d6a39bf30f0",
         )
         self.assertEqual(upstream["revision"], "71bf92916b8d259458017a583a37dfde330b241e")
         self.assertEqual(
