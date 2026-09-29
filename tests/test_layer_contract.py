@@ -733,13 +733,17 @@ class LayerContractTests(unittest.TestCase):
             payload = inputs["downloads"][name]
             self.assertTrue(payload["url"].startswith("https://"), name)
             self.assertRegex(payload["sha256"], r"^[0-9a-f]{64}$", name)
-        self.assertEqual(set(inputs["checkoutSources"]), {"choc_install.ps1"})
+        self.assertEqual(set(inputs["checkoutSources"]), {"choc_install.ps1", "winetricks.ps1"})
         installer_digest = inputs["checkoutSources"]["choc_install.ps1"]["sha256"]
         self.assertRegex(installer_digest, r"^[0-9a-f]{64}$")
         self.assertEqual(
             installer_digest,
             hashlib.sha256((ROOT / "choc_install.ps1").read_bytes()).hexdigest(),
             "runtime input lock must match the installer compiled by CI",
+        )
+        self.assertEqual(
+            inputs["checkoutSources"]["winetricks.ps1"]["sha256"],
+            hashlib.sha256((ROOT / "winetricks.ps1").read_bytes()).hexdigest(),
         )
 
         source = (ROOT / "compat" / "build-runtime.sh").read_text(encoding="utf-8")
@@ -750,7 +754,8 @@ class LayerContractTests(unittest.TestCase):
         self.assertIn("CFW_INSTALLER_SHA256", source)
         self.assertIn('"installerSha256"', source)
         self.assertIn("verify_checkout_source choc_install.ps1", source)
-        self.assertNotIn("verify_checkout_source winetricks.ps1", source)
+        self.assertIn("verify_checkout_source winetricks.ps1 \"$repo_root/winetricks.ps1\"", source)
+        self.assertIn("verify_checkout_source winetricks.ps1 \"$winetricks_script\"", source)
         self.assertIn('release_installer="$(input_value cfwRelease installerFilename)"', source)
         self.assertIn(r'^ChoCinstaller_[0-9]\.[0-9][A-Za-z]\.([0-9])([0-9])([0-9])\.exe$', source)
         self.assertIn('release_powershell_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"', source)

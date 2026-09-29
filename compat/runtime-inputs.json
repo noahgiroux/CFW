@@ -72,6 +72,9 @@
   "checkoutSources": {
     "choc_install.ps1": {
       "sha256": "de70fc77f15d08a076a6f2f47a7d66403e233d63b4a0651c3615e1dfc602315a"
+    },
+    "winetricks.ps1": {
+      "sha256": "40ebf8d9a134534c514675e711b8e3fea6b767dcf057d74902719130ac2ec6c3"
     }
   },
   "upstreamRelease": {

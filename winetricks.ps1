@@ -124,11 +124,31 @@ if (![System.IO.File]::Exists("$env:ProgramData\chocolatey\bin\wget2.exe")){
 
 function w_download_to
 {
-    Param ($dldir, $w_url, $w_file)
+    Param ($dldir, $w_url, $w_file, $expectedSha256 = $null)
 
-    if (![System.IO.Directory]::Exists("$cachedir\\$dldir")){ [System.IO.Directory]::CreateDirectory("$cachedir\\$dldir")}
-
-    if (![System.IO.File]::Exists("$cachedir\\$dldir\\$w_file")){
+    if ([string]::IsNullOrWhiteSpace($w_file) -or [IO.Path]::GetFileName($w_file) -ne $w_file) {
+        throw "Invalid cache filename: $w_file"
+    }
+    if ($expectedSha256 -and $expectedSha256 -notmatch '^[0-9a-fA-F]{64}$') {
+        throw "Invalid SHA-256 for $w_file"
+    }
+    if ($env:CFW_OFFLINE -eq '1' -and -not $expectedSha256) {
+        throw "CFW_OFFLINE=1: expected SHA-256 required for $w_file"
+    }
+    $directory = [IO.Path]::Combine($cachedir, $dldir)
+    $destination = [IO.Path]::Combine($directory, $w_file)
+    [IO.Directory]::CreateDirectory($directory) | Out-Null
+    if ([IO.File]::Exists($destination)) {
+        if ($expectedSha256 -and (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash -ne $expectedSha256) {
+            throw "Cached file failed SHA-256 validation: $destination"
+        }
+        return
+    }
+    if ($env:CFW_OFFLINE -eq '1') {
+        throw "CFW_OFFLINE=1: missing cached file $destination"
+    }
+    $temporary = [IO.Path]::Combine($directory, '.' + $w_file + '.' + [guid]::NewGuid().ToString('N') + '.part')
+    try {
         Write-Host -foregroundcolor yellow "**********************************************************"
         Write-Host -foregroundcolor yellow "*                                                        *"
         Write-Host -foregroundcolor yellow "*        Downloading file(s) and extracting might        *"
@@ -137,8 +157,21 @@ function w_download_to
         Write-Host -foregroundcolor yellow "*                                                        *"
         Write-Host -foregroundcolor yellow "**********************************************************"
         
-         wget2 --restrict-file-names=nocontrol <# do not escape any character #> "$w_url" -P "$cachedir\\$dldir"; quit?('wget2')
+        $LASTEXITCODE = $null
+        & wget2 --restrict-file-names=nocontrol "$w_url" -O "$temporary"
+        $downloadExitCode = $LASTEXITCODE
+        if ($null -eq $downloadExitCode -or $downloadExitCode -ne 0) {
+            throw "wget2 exited with code $downloadExitCode for $w_url"
         }
+        if (-not [IO.File]::Exists($temporary)) { throw "wget2 produced no file: $temporary" }
+        if ($expectedSha256 -and (Get-FileHash -LiteralPath $temporary -Algorithm SHA256).Hash -ne $expectedSha256) {
+            throw "Downloaded file failed SHA-256 validation: $w_file"
+        }
+        [IO.File]::Move($temporary, $destination)
+    }
+    finally {
+        if ([IO.File]::Exists($temporary)) { [IO.File]::Delete($temporary) }
+    }
 }
 
 function check_msu_sanity <# some sanity checks before extracting from msu, like if dlls needed for expansion and the msu are present etc. #>
@@ -196,7 +229,16 @@ function check_aik_sanity <# some sanity checks to see if cached files from wind
 function dlloverride
 {
      Param ($value, $dll)
-     New-ItemProperty -Path 'HKCU:\\Software\\Wine\\DllOverrides' -force -Name $dll -Value $value -PropertyType 'String' | Select $dll
+     $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Software\Wine\DllOverrides')
+     if ($null -eq $key) { throw 'Unable to open Wine DLL overrides registry key' }
+     try {
+         $key.SetValue($dll, $value, [Microsoft.Win32.RegistryValueKind]::String)
+         if ($key.GetValueKind($dll) -ne [Microsoft.Win32.RegistryValueKind]::String -or
+             $key.GetValue($dll) -cne $value) {
+             throw "Wine DLL override verification failed: $dll"
+         }
+     }
+     finally { $key.Dispose() }
 }
 
 function reg_edit
@@ -2200,7 +2242,7 @@ function func_d3dx
 
     Remove-Item -Force -Recurse "$env:TEMP\$(verb)"
         
-    foreach($i in 'concrt140', 'msvcp140', 'msvcp140_1', 'msvcp140_2', 'vcruntime140', 'vcruntime140_1', 'ucrtbase') { dlloverride 'native' $i }
+    foreach($i in 'concrt140', 'msvcp140', 'msvcp140_1', 'msvcp140_2', 'vcruntime140', 'vcruntime140_1', 'ucrtbase') { dlloverride 'native,builtin' $i }
 } <# end vcrun2019 #>
 
 function func_vcrun2022
@@ -2242,7 +2284,7 @@ function func_vcrun2022
     
     Remove-Item -Force -Recurse "$env:TEMP\$(verb)"
         
-    foreach($i in 'concrt140', 'msvcp140', 'msvcp140_1', 'msvcp140_2', 'vcruntime140', 'vcruntime140_1', 'ucrtbase') { dlloverride 'native' $i }
+    foreach($i in 'concrt140', 'msvcp140', 'msvcp140_1', 'msvcp140_2', 'vcruntime140', 'vcruntime140_1', 'ucrtbase') { dlloverride 'native,builtin' $i }
 } <# end vcrun2022 #>
 
 function func_cmd <# native cmd #>
