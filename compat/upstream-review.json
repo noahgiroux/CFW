@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "cfw.upstream-review/v1",
+  "baseline": "71bf92916b8d259458017a583a37dfde330b241e",
+  "reviewedHead": "37b05c663240b0a4a90312d74469e21994f2dbd0",
+  "note": "Source adoption does not imply runtime qualification. The Cage consumer remains pinned to CFW v1.0.5 until new behavioral evidence and immutable artifacts exist.",
+  "entries": [
+    {
+      "commits": ["2f210c297eb618dd58561f8de373f859c7c09d71", "94059556681ff2cde45cf26b7e5c9626772c68b5", "37b05c663240b0a4a90312d74469e21994f2dbd0"],
+      "paths": ["winetricks.ps1"],
+      "decisions": [
+        {"change": "explicit downloader filename, DLL registry helper, VC++ native,builtin fallback", "status": "adapted", "reason": "Add temporary destination, optional SHA-256 validation, offline guard and registry readback; preserve only targeted VC++ fallback.", "implementation": ["winetricks.ps1", "compat/build-runtime.sh", "compat/runtime-inputs.json"], "qualification": "PowerShell downloader and x86/x64 registry behavior; rebuilt Wine 11.0 CFW artifact and Cage lifecycle proof", "cageImpact": "No consumer code change expected; new CFW manifest digest must be pinned after qualification."},
+        {"change": "tar.exe verb", "status": "deferred", "reason": "No demonstrated Cage package requiring Windows bsdtar.", "implementation": [], "qualification": "Pinned binary and real package/path/exit tests if demanded", "cageImpact": "None today."},
+        {"change": "AIK/MSU HTTP range extraction, profile and miscellaneous winetricks changes", "status": "deferred", "reason": "Mutable sources, positional archive entries and unrelated profile behavior need independent evidence.", "implementation": [], "qualification": "Identity-checked range responses, named members and output hashes; command-semantic regression tests", "cageImpact": "None today."}
+      ]
+    },
+    {"commits": ["4e79ec7faec834d12914f9ca64ffd27338421e8c"], "paths": ["EXTRAS/wine_sxs.patch"], "status": "under-investigation", "reason": "Early CLR metadata validation is preferable to page-fault recovery, but upstream's offset+length check can overflow and nested strings need bounds checking. The exact WineHQ 11.0 packaged source and source-build path must be bound first.", "implementation": [], "qualification": "Plain COM and valid CLR activation reproducers, source-built 32/64 DLLs, CFW artifact and Cage proof", "cageImpact": "Wine producer image/source identity and new CFW runtime artifact required."},
+    {"commits": ["15650a36382dc0979775274415716926a1844fc5"], "paths": ["EXTRAS/wine_combase.patch"], "status": "under-investigation", "reason": "IGlobalOptions, activation filter, CoCancelCall and proxy blanket need separate semantic tests; fake S_OK and hashed WinRT IID are rejected for the default runtime.", "implementation": [], "qualification": "One reproducer and source patch per justified behavior", "cageImpact": "Only through a newly qualified CFW/Wine artifact."},
+    {"commits": ["ef3b27acbd1ad949f5cd163da7c2a434400e440e", "c431391e795d2e4269b4523b41869c18d306ca47"], "paths": ["EXTRAS/wine_combase.7z", "EXTRAS/wine_sxs.7z"], "status": "rejected", "reason": "Opaque DLL archives do not establish source or Wine-image provenance.", "implementation": [], "qualification": "Rebuild from exact source instead", "cageImpact": "None."},
+    {"commits": ["3bf6f0ae1f6e3662189538b81c7fd22d02721d0f"], "paths": ["EXTRAS/wine_wintypes.patch"], "status": "rejected", "reason": "Runtime fetch from a mutable development branch violates pinned inputs.", "implementation": [], "qualification": "Pin exact WinMetadata revision and hash if needed", "cageImpact": "None."},
+    {"commits": ["dee75883f43c140d9ae2a4dd4c54116d4d232665", "ba1fac2c966f17dfa3361ef983458cab3a47ec00"], "paths": ["choc_install.ps1"], "status": "deferred", "reason": "Profile and installer changes alter command, cache and module-path semantics; existing CFW installer source remains locked.", "implementation": [], "qualification": "Compare each behavior with prepared-prefix and Synchro execution proofs", "cageImpact": "Requalification if adopted."},
+    {"commits": ["bceaaef22744513cebd12644d2171f6b403e7755", "aa843df9ad99b7e7d637f20a17a948062b89ad14"], "paths": ["installer.c"], "status": "deferred", "reason": "No demonstrated prepared-runtime failure justifies updating the pinned installer behavior.", "implementation": [], "qualification": "Source diff and installer runtime proof", "cageImpact": "New CFW artifact if adopted."},
+    {"commits": ["dd3ea672defc20a544a7744893ec36eaafdb7a5f"], "paths": ["EXTRAS/powershell_collected_codesnippets_examples/powershell_collected_codesnippets_examples.ps1"], "status": "deferred", "reason": "Examples are outside the prepared-runtime contract.", "implementation": [], "qualification": "Only if promoted to a declared runtime input", "cageImpact": "None."}
+  ]
+}
