@@ -97,6 +97,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 compat/runtime_inputs.py check-header
           sudo apt-get update
           sudo apt-get install -y gcc-mingw-w64-x86-64
           x86_64-w64-mingw32-gcc -O2 -fno-ident -fno-stack-protector -fomit-frame-pointer \

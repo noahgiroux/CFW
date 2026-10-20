@@ -25,11 +25,11 @@
 #include <winternl.h>
 #include <shlobj.h>
 #include <knownfolders.h>
+#include "compat/installer-inputs.h"
 
 struct paths {
     wchar_t pathW[MAX_PATH];
     wchar_t setupcache[MAX_PATH];
-    wchar_t *filenameW;
     wchar_t sevenzippath[MAX_PATH];
     wchar_t cache_dir[MAX_PATH];
     wchar_t argv[32];
@@ -65,23 +65,6 @@ static BOOL append_wide(wchar_t *destination, size_t capacity, const wchar_t *so
     return TRUE;
 }
 
-static DWORD run_process(LPCWSTR application, LPWSTR command_line, DWORD creation_flags) {
-    STARTUPINFOW startup = {0};
-    PROCESS_INFORMATION process = {0};
-    DWORD exit_code = ERROR_GEN_FAILURE;
-
-    startup.cb = sizeof(startup);
-    if(!CreateProcessW(application, command_line, 0, 0, 0, creation_flags, 0, 0, &startup, &process))
-        return GetLastError();
-    if(WaitForSingleObject(process.hProcess, INFINITE) != WAIT_OBJECT_0)
-        exit_code = ERROR_GEN_FAILURE;
-    else if(!GetExitCodeProcess(process.hProcess, &exit_code))
-        exit_code = GetLastError();
-    CloseHandle(process.hProcess);
-    CloseHandle(process.hThread);
-    return exit_code;
-}
-
 static DWORD run_process_bounded(
     LPCWSTR application,
     LPWSTR command_line,
@@ -101,7 +84,7 @@ static DWORD run_process_bounded(
         if(!GetExitCodeProcess(process.hProcess, &exit_code))
             exit_code = GetLastError();
     }
-    else if(wait_result == WAIT_TIMEOUT) {
+    else if(wait_result == WAIT_TIMEOUT && timeout_ms != INFINITE) {
         if(!TerminateProcess(process.hProcess, ERROR_TIMEOUT))
             exit_code = GetLastError();
         else {
@@ -110,10 +93,14 @@ static DWORD run_process_bounded(
         }
     }
     else
-        exit_code = GetLastError();
+        exit_code = timeout_ms == INFINITE ? ERROR_GEN_FAILURE : GetLastError();
     CloseHandle(process.hProcess);
     CloseHandle(process.hThread);
     return exit_code;
+}
+
+static DWORD run_process(LPCWSTR application, LPWSTR command_line, DWORD creation_flags) {
+    return run_process_bounded(application, command_line, creation_flags, INFINITE);
 }
 
 static DWORD download_file(LPCWSTR source, LPCWSTR destination) {
@@ -391,7 +378,7 @@ DWORD WINAPI net48_install(void *ptr){
 }
 
 DWORD WINAPI chocolatey_install(void *ptr){
-    wchar_t dest[MAX_PATH], bufW[MAX_PATH]=L"", bufW1[525]=L"", url[] = L"https://packages.chocolatey.org/chocolatey.2.7.4.nupkg";
+    wchar_t dest[MAX_PATH], bufW[MAX_PATH]=L"", bufW1[525]=L"", url[] = CFW_CHOCOLATEY_URL;
     DWORD exit_code;
     struct paths *p = (struct paths*)ptr;
 
@@ -399,14 +386,14 @@ DWORD WINAPI chocolatey_install(void *ptr){
 
     ExpandEnvironmentStringsW(L"%ProgramData%", dest, MAX_PATH + 1);
 
-    if(GetFileAttributesW(wcscat(wcscat(bufW1, p->cache_dir), wcsrchr(url, L'/') + 1)) == INVALID_FILE_ATTRIBUTES) {
+    if(GetFileAttributesW(wcscat(wcscat(bufW1, p->cache_dir), CFW_CHOCOLATEY_FILENAME)) == INVALID_FILE_ATTRIBUTES) {
         bufW1[0] = 0;
-        wcscat(wcscat(bufW, p->setupcache), wcsrchr(url, L'/') + 1);
+        wcscat(wcscat(bufW, p->setupcache), CFW_CHOCOLATEY_FILENAME);
         exit_code = download_file(url, bufW);
         if(exit_code != ERROR_SUCCESS) return exit_code;
     }
     else {
-        wcscat(wcscat(bufW, p->cache_dir), wcsrchr(url, L'/') + 1);
+        wcscat(wcscat(bufW, p->cache_dir), CFW_CHOCOLATEY_FILENAME);
     }
 
     bufW1[0] = 0;
@@ -430,15 +417,10 @@ DWORD WINAPI pscore_install(void *ptr){
     if(expanded_path_length > MAX_PATH) return ERROR_INSUFFICIENT_BUFFER;
 
     /* Download and install PowerShell before running the finalizer. */
-    WCHAR versionW[] = L".....", msiW[MAX_PATH]=L"", downloadW[MAX_PATH]=L"";
-    versionW[0] = p->filenameW[20]; versionW[2] = p->filenameW[21]; versionW[4] = p->filenameW[22];
-    wcscat(wcscat(msiW, L"PowerShell-"), versionW);
-    wcscat(msiW, L"-win-x64.msi");
-
-    wchar_t *ps_url = wcscat(wcscat(wcscat(wcscat(downloadW, L"https://github.com/PowerShell/PowerShell/releases/download/v"), versionW), L"/"), msiW);
-    if(GetFileAttributesW(wcscat(wcscat(bufW1, p->cache_dir), wcsrchr(ps_url, L'/') + 1)) == INVALID_FILE_ATTRIBUTES) {
+    const WCHAR *ps_url = CFW_POWERSHELL_URL;
+    if(GetFileAttributesW(wcscat(wcscat(bufW1, p->cache_dir), CFW_POWERSHELL_FILENAME)) == INVALID_FILE_ATTRIBUTES) {
         bufW1[0] = 0;
-        wcscat(wcscat(bufW1, p->setupcache), wcsrchr(ps_url, L'/') + 1);
+        wcscat(wcscat(bufW1, p->setupcache), CFW_POWERSHELL_FILENAME);
         exit_code = download_file(ps_url, bufW1);
         if(exit_code != ERROR_SUCCESS) return exit_code;
     }
@@ -538,9 +520,6 @@ int mainCRTStartup(void) {
 
     module_name = wcsrchr(p.pathW, L'\\');
     if(!module_name) ExitProcess(ERROR_BAD_PATHNAME);
-    if(wcslen(module_name) <= 22) ExitProcess(ERROR_BAD_FORMAT);
-    p.filenameW = wcsdup(module_name);
-    if(!p.filenameW) ExitProcess(ERROR_NOT_ENOUGH_MEMORY);
     *module_name = 0;
     wcscat(wcscat(p.sevenzippath, p.pathW), L"\\7z.exe");
     for(int i = 1; i < argc; i++) {

@@ -19,8 +19,12 @@ class InstallerOrchestrationContractTests(unittest.TestCase):
             INSTALLER.index("DWORD WINAPI chocolatey_install") :
             INSTALLER.index("DWORD WINAPI pscore_install")
         ]
-        urls = re.findall(r'https://packages\.chocolatey\.org/[^"\s]+', download)
-        self.assertEqual(urls, [f"https://packages.chocolatey.org/{filename}"])
+        header = (ROOT / "compat/installer-inputs.h").read_text()
+        constants = dict(re.findall(r'#define (CFW_\w+) L("[^"\n]+")', header))
+        self.assertEqual(json.loads(constants["CFW_CHOCOLATEY_URL"]), payload["url"])
+        self.assertEqual(json.loads(constants["CFW_CHOCOLATEY_FILENAME"]), filename)
+        self.assertIn("CFW_CHOCOLATEY_URL", download)
+        self.assertIn("CFW_CHOCOLATEY_FILENAME", download)
         self.assertEqual(payload["filename"], filename)
         self.assertEqual(
             payload["url"],
@@ -139,11 +143,9 @@ class InstallerOrchestrationContractTests(unittest.TestCase):
 
     def test_installer_directory_is_derived_without_trailing_separator(self):
         self.assertIn("module_name = wcsrchr(p.pathW, L'\\\\')", MAIN)
-        self.assertIn("p.filenameW = wcsdup(module_name)", MAIN)
         self.assertIn("*module_name = 0", MAIN)
         self.assertIn("module_path_length >= MAX_PATH", MAIN)
-        self.assertIn("wcslen(module_name) <= 22", MAIN)
-        self.assertLess(MAIN.index("p.filenameW = wcsdup(module_name)"), MAIN.index("*module_name = 0"))
+        self.assertNotIn("filenameW", INSTALLER)
         self.assertNotIn("wcslen(p.pathW) - 26", MAIN)
 
     def test_powershell_finalizer_command_has_argv0_and_explicit_file_mode(self):

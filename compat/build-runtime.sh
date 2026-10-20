@@ -110,64 +110,10 @@ read_single_observed_line() {
 }
 
 input_value() {
-  local section="$1" field="$2"
-  python3 - "$runtime_inputs" "$section" "$field" <<'PY2'
-import json
-import re
-import sys
-
-path, section, field = sys.argv[1:]
-try:
-    value = json.load(open(path, encoding="utf-8"))["downloads"][section][field]
-except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc:
-    raise SystemExit(f"invalid runtime input {section}.{field}: {exc}")
-if not isinstance(value, str) or not value:
-    raise SystemExit(f"invalid runtime input {section}.{field}")
-if field == "sha256" and not re.fullmatch(r"[0-9a-f]{64}", value):
-    raise SystemExit(f"invalid runtime input digest {section}.{field}")
-print(value)
-PY2
+  python3 "$repo_root/compat/runtime_inputs.py" get "$@"
 }
 
-runtime_value() {
-  local field="$1"
-  python3 - "$runtime_inputs" "$field" <<'PY2'
-import json
-import re
-import sys
-
-path, field = sys.argv[1:]
-try:
-    value = json.load(open(path, encoding="utf-8"))[field]
-except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc:
-    raise SystemExit(f"invalid runtime input {field}: {exc}")
-if not isinstance(value, str) or not value:
-    raise SystemExit(f"invalid runtime input {field}")
-if field == "runtimeId" and not re.fullmatch(r"[A-Za-z0-9._-]+", value):
-    raise SystemExit("invalid runtimeId")
-print(value)
-PY2
-}
-
-runtime_version() {
-  local component="$1"
-  python3 - "$runtime_inputs" "$component" <<'PY2'
-import json
-import re
-import sys
-
-path, component = sys.argv[1:]
-try:
-    value = json.load(open(path, encoding="utf-8"))["versions"][component]
-except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc:
-    raise SystemExit(f"invalid runtime version {component}: {exc}")
-if not isinstance(value, str) or not re.fullmatch(r"[0-9]+(?:\.[0-9]+){1,3}", value):
-    raise SystemExit(f"invalid runtime version {component}")
-print(value)
-PY2
-}
-
-CFW_RUNTIME_ID="$(runtime_value runtimeId)"
+CFW_RUNTIME_ID="$(input_value runtimeId)"
 mapfile -t contract_identity < <(python3 - "$compat_contract" <<'PY2'
 import json
 import re
@@ -202,32 +148,14 @@ if [[ "$CFW_EXPECTED_WINE_VERSION" != "wine-$CFW_CONTRACT_WINE_VERSION" ]]; then
     "$CFW_CONTRACT_WINE_VERSION" "$CFW_EXPECTED_WINE_VERSION" >&2
   exit 64
 fi
-CFW_EXPECTED_POWERSHELL_VERSION="$(runtime_version powershell)"
-CFW_EXPECTED_CHOCOLATEY_VERSION="$(runtime_version chocolatey)"
-CFW_EXPECTED_SYNCHRO_VERSION="$(runtime_version synchro)"
+CFW_EXPECTED_POWERSHELL_VERSION="$(input_value versions powershell)"
+CFW_EXPECTED_CHOCOLATEY_VERSION="$(input_value versions chocolatey)"
+CFW_EXPECTED_SYNCHRO_VERSION="$(input_value versions synchro)"
 export CFW_RUNTIME_ID CFW_CONTRACT_SCHEMA CFW_WINE_SESSION_CONTRACT CFW_EXPECTED_WINE_VERSION CFW_EXPECTED_POWERSHELL_VERSION CFW_EXPECTED_CHOCOLATEY_VERSION CFW_EXPECTED_SYNCHRO_VERSION
-
-checkout_source_sha256() {
-  local source_name="$1"
-  python3 - "$runtime_inputs" "$source_name" <<'PY2'
-import json
-import re
-import sys
-
-path, source_name = sys.argv[1:]
-try:
-    value = json.load(open(path, encoding="utf-8"))["checkoutSources"][source_name]["sha256"]
-except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc:
-    raise SystemExit(f"invalid checkout source {source_name}: {exc}")
-if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
-    raise SystemExit(f"invalid checkout source digest {source_name}")
-print(value)
-PY2
-}
 
 verify_checkout_source() {
   local source_name="$1" source_path="$2" expected actual
-  expected="$(checkout_source_sha256 "$source_name")"
+  expected="$(input_value checkoutSources "$source_name" sha256)"
   actual="$(sha256sum "$source_path" | awk '{print $1}')"
   if [[ "$actual" != "$expected" ]]; then
     printf '[cfw] checkout source checksum mismatch: %s\nexpected=%s\nactual=%s\n' \
@@ -255,7 +183,7 @@ fetch_verified() {
 
 fetch_input() {
   local input_name="$1" destination="$2"
-  fetch_verified "$(input_value "$input_name" url)" "$(input_value "$input_name" sha256)" "$destination"
+  fetch_verified "$(input_value downloads "$input_name" url)" "$(input_value downloads "$input_name" sha256)" "$destination"
 }
 
 winepath_to_windows() {
@@ -325,23 +253,12 @@ PY2
 }
 
 mark_stage fetch-inputs
-release_archive="$work/$(input_value cfwRelease filename)"
+release_archive="$work/$(input_value downloads cfwRelease filename)"
 fetch_input cfwRelease "$release_archive"
 rm -rf "$release_root"
 mkdir -p "$release_root"
 7z x -y "$release_archive" "-o$release_root" >"$logs/release-extract.log"
-release_installer="$(input_value cfwRelease installerFilename)"
-if [[ ! "$release_installer" =~ ^ChoCinstaller_[0-9]\.[0-9][A-Za-z]\.([0-9])([0-9])([0-9])\.exe$ ]]; then
-  printf '[cfw] release installer filename is incompatible with the installer version parser: %s\n' \
-    "$release_installer" >&2
-  exit 64
-fi
-release_powershell_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
-if [[ "$release_powershell_version" != "$CFW_EXPECTED_POWERSHELL_VERSION" ]]; then
-  printf '[cfw] release installer PowerShell version mismatch: filename=%s locked=%s\n' \
-    "$release_powershell_version" "$CFW_EXPECTED_POWERSHELL_VERSION" >&2
-  exit 64
-fi
+release_installer="$(input_value downloads cfwRelease installerFilename)"
 [[ -f "$release_dir/$release_installer" ]]
 cp -f "$compiled_installer" "$release_dir/$release_installer"
 printf '%s  %s\n' "$CFW_INSTALLER_SHA256" "$compiled_installer" >"$logs/installer-under-test.sha256"
@@ -350,7 +267,7 @@ cp -f "$repo_root/choc_install.ps1" "$release_dir/choc_install.ps1"
 verify_checkout_source winetricks.ps1 "$repo_root/winetricks.ps1"
 
 for input_name in chocolatey powershell dotnet mscoree d3d64 d3d32 conemu sevenZipExtractor windowsPowerShell; do
-  fetch_input "$input_name" "$payload_cache/$(input_value "$input_name" filename)"
+  fetch_input "$input_name" "$payload_cache/$(input_value downloads "$input_name" filename)"
 done
 
 mark_stage prove-wine-identity
@@ -664,7 +581,7 @@ test -s "$wrapper64" && test -s "$wrapper32"
 # choco.exe while continuing to execute package scripts through Synchro.
 mark_stage install-chocolatey-type-dependencies
 chocolatey_root="$wine_prefix/drive_c/ProgramData/chocolatey"
-windows_powershell_package="$payload_cache/$(input_value windowsPowerShell filename)"
+windows_powershell_package="$payload_cache/$(input_value downloads windowsPowerShell filename)"
 windows_powershell_stage="$work/windows-powershell-type-dependencies"
 rm -rf -- "$windows_powershell_stage"
 mkdir -p "$windows_powershell_stage"

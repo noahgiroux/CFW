@@ -1,6 +1,6 @@
 name: Build Release
 
-# The default follows the integrated canonical upstream installer filename contract.
+# The release name is independent of the runtime versions in compat/runtime-inputs.json.
 
 on:
   workflow_dispatch:
@@ -50,6 +50,7 @@ jobs:
 
       - name: Compile installer
         run: |
+          python3 compat/runtime_inputs.py check-header
           set +e
           x86_64-w64-mingw32-gcc -O2 -fno-ident -fno-stack-protector -fomit-frame-pointer \
             -fno-unwind-tables -fno-asynchronous-unwind-tables -mconsole -municode \

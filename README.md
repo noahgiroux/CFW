@@ -63,6 +63,25 @@ CI passes the complete PowerShell, Synchro, Chocolatey version, feature-policy,
 and local install/uninstall proofs. Publishing and consumer adoption require a
 new immutable runtime release; existing releases are unchanged.
 
+## Locked installer inputs
+
+`compat/runtime-inputs.json` is authoritative for both the prepared-runtime
+builder and the native installer's PowerShell/Chocolatey downloads and cache
+filenames. The installer no longer derives PowerShell's version from its own
+executable name; renaming a release executable does not change its dependencies.
+
+After changing those locked inputs, regenerate the checked-in native header:
+
+```bash
+python3 compat/runtime_inputs.py header > compat/installer-inputs.h
+python3 compat/runtime_inputs.py check-header
+```
+
+The release, compile, and runtime producer workflows reject a stale header before
+compilation. The same helper reads and validates builder lock values, including
+versions, digests, URLs, and cache filenames. Native process execution shares one
+implementation for exit-code propagation, handle cleanup, and bounded timeouts.
+
 ## Prepared runtime artifact
 
 The prepared prefix is produced inside the same universal Cage image that will

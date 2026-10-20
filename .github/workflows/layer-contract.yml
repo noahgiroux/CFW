@@ -56,4 +56,5 @@ jobs:
 
       - name: Compile CFW installer
         run: |
+          python3 compat/runtime_inputs.py check-header
           x86_64-w64-mingw32-gcc -std=gnu11 -Wall -Wextra -municode -c installer.c -o /tmp/cfw-installer.o
