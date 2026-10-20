@@ -342,8 +342,8 @@ class LayerContractTests(unittest.TestCase):
         self.assertIn('os.replace(temporary, path)', policy_writer)
         self.assertIn('getattr(os, "O_NOFOLLOW", 0)', policy_writer)
         self.assertIn("stat.S_ISLNK", policy_writer)
-        self.assertIn("Chocolatey CLI 2.6.0", policy_template)
-        self.assertIn("4321c87bceeaf7f6262d2616f20bddd7e432e8d8", policy_template)
+        self.assertIn("Chocolatey CLI 2.7.4", policy_template)
+        self.assertIn("37541d3b7e7b3079d69e70a0bfd70f302b808e4d", policy_template)
         self.assertIn(
             '<feature name="powershellHost" enabled="false" setExplicitly="true" />',
             policy_template,
@@ -528,8 +528,8 @@ class LayerContractTests(unittest.TestCase):
             "CFW_OBSERVED_WINE_VERSION": "wine-11.0",
             "CFW_EXPECTED_WINE_VERSION": "wine-11.0",
             "CFW_EXPECTED_POWERSHELL_VERSION": "7.6.5",
-            "CFW_OBSERVED_CHOCOLATEY_VERSION": "2.6.0",
-            "CFW_EXPECTED_CHOCOLATEY_VERSION": "2.6.0",
+            "CFW_OBSERVED_CHOCOLATEY_VERSION": "2.7.4",
+            "CFW_EXPECTED_CHOCOLATEY_VERSION": "2.7.4",
             "CFW_CONTRACT_SCHEMA": "cfw.compatibility-contract/v3",
             "CFW_CONTRACT_SHA256": "0" * 64,
             "CFW_RUNTIME_ID": "cfw-wine-11.0",
@@ -635,7 +635,7 @@ class LayerContractTests(unittest.TestCase):
         source = (ROOT / "compat" / "build-runtime.sh").read_text(encoding="utf-8")
 
         self.assertEqual(inputs["versions"]["powershell"], "7.6.5")
-        self.assertEqual(inputs["versions"]["chocolatey"], "2.6.0")
+        self.assertEqual(inputs["versions"]["chocolatey"], "2.7.4")
         self.assertEqual(inputs["versions"]["synchro"], "4.2.0")
         self.assertIn('CFW_RUNTIME_ID="$(runtime_value runtimeId)"', source)
         self.assertIn('CFW_EXPECTED_POWERSHELL_VERSION="$(runtime_version powershell)"', source)
@@ -872,8 +872,8 @@ class LayerContractTests(unittest.TestCase):
             return lines[0]
 
         self.assertEqual(parse_one("wine-11.0\n"), "wine-11.0")
-        self.assertEqual(parse_one("2.6.0\n"), "2.6.0")
-        for malformed in ("wine-\n11.0\n", "2.\n6.0\n", "\n2.6.0\n", ""):
+        self.assertEqual(parse_one("2.7.4\n"), "2.7.4")
+        for malformed in ("wine-\n11.0\n", "2.\n7.4\n", "\n2.7.4\n", ""):
             with self.subTest(malformed=malformed):
                 with self.assertRaises(ValueError):
                     parse_one(malformed)

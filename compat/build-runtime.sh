@@ -640,7 +640,7 @@ fi
 choco_win='C:\ProgramData\chocolatey\choco.exe'
 choco_query_launcher=(wine "$choco_win")
 choco_package_launcher=(wineconsole "$choco_win")
-# Chocolatey 2.6.0 asks .NET for Environment.CurrentDirectory during startup.
+# Chocolatey asks .NET for Environment.CurrentDirectory during startup.
 # A native s6 task begins under a Linux-only path, which Wine exposes in a form
 # Chocolatey's FileIOPermission compatibility layer rejects. Run every query
 # and package operation from the prefix's C: root, matching upstream CFW.
@@ -702,7 +702,7 @@ export ChocolateyToolsLocation='C:\tools'
 # CFW's native bootstrap promotes the canonical Chocolatey tree before
 # Chocolatey's first command, but the upstream package does not contain the
 # config directory or embedded default config as a loose file. Seed the locked
-# 2.6.0 template with CFW's external-host policy before starting choco.exe.
+# 2.7.4 template with CFW's external-host policy before starting choco.exe.
 mark_stage apply-chocolatey-policy
 chocolatey_config_template="$repo_root/compat/chocolatey.config"
 chocolatey_config="$wine_prefix/drive_c/ProgramData/chocolatey/config/chocolatey.config"

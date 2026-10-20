@@ -76,7 +76,7 @@ The runtime build is valid only when all behavioral proofs pass:
 6. both Synchro wrappers load the composed CFW profile and create independent
    x64/x86 filesystem sentinels;
 7. before Chocolatey’s first process starts, CFW atomically seeds the locked
-   Chocolatey 2.6.0 default configuration with the in-process
+   Chocolatey 2.7.4 default configuration with the in-process
    `powershellHost` explicitly disabled, then verifies Chocolatey reports that
    persisted status;
 8. canonical Chocolatey emits one exact observed version equal to the locked version;

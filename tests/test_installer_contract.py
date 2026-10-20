@@ -1,4 +1,6 @@
 from pathlib import Path
+import json
+import re
 import unittest
 
 
@@ -8,6 +10,28 @@ MAIN = INSTALLER[INSTALLER.index("int mainCRTStartup") :]
 
 
 class InstallerOrchestrationContractTests(unittest.TestCase):
+    def test_chocolatey_download_and_saved_cache_match_runtime_lock(self):
+        inputs = json.loads((ROOT / "compat/runtime-inputs.json").read_text())
+        version = inputs["versions"]["chocolatey"]
+        payload = inputs["downloads"]["chocolatey"]
+        filename = f"chocolatey.{version}.nupkg"
+        download = INSTALLER[
+            INSTALLER.index("DWORD WINAPI chocolatey_install") :
+            INSTALLER.index("DWORD WINAPI pscore_install")
+        ]
+        urls = re.findall(r'https://packages\.chocolatey\.org/[^"\s]+', download)
+        self.assertEqual(urls, [f"https://packages.chocolatey.org/{filename}"])
+        self.assertEqual(payload["filename"], filename)
+        self.assertEqual(
+            payload["url"],
+            f"https://community.chocolatey.org/api/v2/package/chocolatey/{version}",
+        )
+        script = (ROOT / "choc_install.ps1").read_text()
+        self.assertEqual(re.findall(r"chocolatey\.[0-9.]+\.nupkg", script), [filename])
+        self.assertIn(f"chocolatey-{version}-", inputs["runtimeId"])
+        contract = json.loads((ROOT / "compat/contract.json").read_text())
+        self.assertEqual(contract["provides"]["package-manager"], f"chocolatey-{version}")
+
     def test_finalizer_runs_only_after_prerequisite_threads_finish(self):
         wait = MAIN.find("WaitForMultipleObjects")
         finalizer = MAIN.find("pscore_install(&p)")
