@@ -76,16 +76,11 @@ static DWORD run_process_bounded(
     return exit_code;
 }
 
-static DWORD run_process(LPCWSTR application, LPWSTR command_line, DWORD creation_flags) {
-    return run_process_bounded(application, command_line, creation_flags, INFINITE);
-}
-
 static DWORD run_argv(LPCWSTR application, const wchar_t *const *arguments, DWORD flags, DWORD timeout_ms) {
     wchar_t command[8192];
     if(!build_command(command, sizeof(command) / sizeof(command[0]), arguments))
         return ERROR_INSUFFICIENT_BUFFER;
-    return timeout_ms == INFINITE ? run_process(application, command, flags)
-                                 : run_process_bounded(application, command, flags, timeout_ms);
+    return run_process_bounded(application, command, flags, timeout_ms);
 }
 
 static DWORD download_file(LPCWSTR source, LPCWSTR destination) {
@@ -119,7 +114,7 @@ static DWORD native_finalize_chocolatey(struct paths *p) {
     wchar_t mscoree_msu[MAX_PATH] = L"";
     wchar_t system_mscoree[MAX_PATH] = L"";
     wchar_t syswow64_mscoree[MAX_PATH] = L"";
-    DWORD expanded, result, attributes;
+    DWORD result;
     HKEY dll_overrides;
 
     log_stage("[cfw] stage=native-finalizer-start\n");
@@ -132,36 +127,20 @@ static DWORD native_finalize_chocolatey(struct paths *p) {
      */
     if(!join_path(mscoree_msu, MAX_PATH, p->cache_dir, CFW_MSCOREE_FILENAME))
         return ERROR_INSUFFICIENT_BUFFER;
-    attributes = GetFileAttributesW(mscoree_msu);
-    if(attributes == INVALID_FILE_ATTRIBUTES) return GetLastError();
-    if((attributes & FILE_ATTRIBUTE_DIRECTORY) || (attributes & FILE_ATTRIBUTE_REPARSE_POINT))
-        return ERROR_INVALID_DATA;
+    result = require_file(mscoree_msu);
+    if(result != ERROR_SUCCESS) return result;
     const wchar_t *mscoree_arguments[] = {L"wusa.exe", mscoree_msu, L"/quiet", L"/norestart", NULL};
     log_stage("[cfw] stage=mscoree-install-start\n");
     result = run_argv(NULL, mscoree_arguments, 0, 180000);
     if(!install_succeeded(result) && result != ERROR_TIMEOUT) return result;
-    expanded = ExpandEnvironmentStringsW(
-        L"%SystemRoot%\\System32\\mscoree.dll",
-        system_mscoree,
-        MAX_PATH
-    );
-    if(expanded == 0) return GetLastError();
-    if(expanded > MAX_PATH) return ERROR_INSUFFICIENT_BUFFER;
-    expanded = ExpandEnvironmentStringsW(
-        L"%SystemRoot%\\SysWOW64\\mscoree.dll",
-        syswow64_mscoree,
-        MAX_PATH
-    );
-    if(expanded == 0) return GetLastError();
-    if(expanded > MAX_PATH) return ERROR_INSUFFICIENT_BUFFER;
-    attributes = GetFileAttributesW(system_mscoree);
-    if(attributes == INVALID_FILE_ATTRIBUTES) return GetLastError();
-    if((attributes & FILE_ATTRIBUTE_DIRECTORY) || (attributes & FILE_ATTRIBUTE_REPARSE_POINT))
-        return ERROR_INVALID_DATA;
-    attributes = GetFileAttributesW(syswow64_mscoree);
-    if(attributes == INVALID_FILE_ATTRIBUTES) return GetLastError();
-    if((attributes & FILE_ATTRIBUTE_DIRECTORY) || (attributes & FILE_ATTRIBUTE_REPARSE_POINT))
-        return ERROR_INVALID_DATA;
+    result = expand_path(L"%SystemRoot%\\System32\\mscoree.dll", system_mscoree, MAX_PATH);
+    if(result != ERROR_SUCCESS) return result;
+    result = expand_path(L"%SystemRoot%\\SysWOW64\\mscoree.dll", syswow64_mscoree, MAX_PATH);
+    if(result != ERROR_SUCCESS) return result;
+    result = require_file(system_mscoree);
+    if(result != ERROR_SUCCESS) return result;
+    result = require_file(syswow64_mscoree);
+    if(result != ERROR_SUCCESS) return result;
     log_stage("[cfw] stage=mscoree-install-complete\n");
 
     result = expand_path(L"%ProgramData%\\tools\\chocolateyInstall", raw_root, MAX_PATH);

@@ -66,8 +66,7 @@ int main(void) {
     for (mode = 0; mode <= 5; mode++) {
         for (int bounded = 0; bounded <= 1; bounded++) {
             closed = waits = terminated = 0;
-            DWORD actual = bounded ? run_process_bounded(NULL, NULL, 0, 250)
-                                   : run_process(NULL, NULL, 0);
+            DWORD actual = run_process_bounded(NULL, NULL, 0, bounded ? 250 : INFINITE);
             DWORD expected = mode == 0 ? 42
                            : !bounded && (mode == 2 || mode == 3 || mode == 5) ? ERROR_GEN_FAILURE
                            : mode == 2 ? ERROR_TIMEOUT : 123;

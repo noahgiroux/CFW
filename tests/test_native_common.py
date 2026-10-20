@@ -154,11 +154,15 @@ int main(void) {
     const wchar_t *escaped[] = {L"a\\\"b", NULL};
     assert(build_command(command, 1024, escaped));
     assert(!wcscmp(command, L"\"a\\\\\\\"b\""));
+    /* MSI options/properties must stay bare; Wine preserves their quotes. */
+    const wchar_t *msi[] = {L"msiexec.exe", L"/i", L"C:\\cache dir\\netfx.msi", L"MSIFASTINSTALL=2", L"/QN", NULL};
+    assert(build_command(command, 1024, msi));
+    assert(!wcscmp(command, L"msiexec.exe /i \"C:\\cache dir\\netfx.msi\" MSIFASTINSTALL=2 /QN"));
     struct { wchar_t left, buffer[6], right; } guarded = {L'L', L"", L'R'};
-    const wchar_t *exact[] = {L"abc", NULL};
+    const wchar_t *exact[] = {L"a b", NULL};
     assert(build_command(guarded.buffer, 6, exact));
-    assert(!wcscmp(guarded.buffer, L"\"abc\""));
-    const wchar_t *too_long[] = {L"abcd", NULL};
+    assert(!wcscmp(guarded.buffer, L"\"a b\""));
+    const wchar_t *too_long[] = {L"a bc", NULL};
     assert(!build_command(guarded.buffer, 6, too_long));
     assert(guarded.buffer[0]==0 && guarded.left==L'L' && guarded.right==L'R');
     assert(!build_command(NULL, 0, args));

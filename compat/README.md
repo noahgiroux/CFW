@@ -104,10 +104,10 @@ Short-lived CI artifacts remain diagnostics only; they are not the consumer
 interface.
 
 `build-runtime.sh` collects the observations, then passes named return codes and
-marker paths to `runtime_evidence.py`. The writer rejects missing, duplicate,
-unknown, or mislabeled observations and checks the exact persisted proof bytes.
-Its manifest command binds the archive and evidence hashes to the authoritative
-contract. The public evidence and manifest schemas and required proof inventory
+one probe directory to `runtime_evidence.py`. The writer rejects missing, duplicate, or
+unknown return codes and checks the exact persisted proof bytes.
+Its manifest command writes the checksum sidecar and manifest from one archive
+hash and binds the evidence to the authoritative contract. The public evidence and manifest schemas and required proof inventory
 remain unchanged.
 
 ## Profile composition

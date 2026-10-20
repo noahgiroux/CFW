@@ -69,11 +69,10 @@ WINEPATH_LABELS = (
 )
 
 
-def write_evidence(path: Path, logs_path: Path, markers: dict[str, Path], return_codes: dict[str, int]) -> bool:
+def write_evidence(path: Path, logs_path: Path, probe_dir: Path, return_codes: dict[str, int]) -> bool:
     if set(return_codes) != set(RETURN_CODE_KEYS) or any(type(value) is not int for value in return_codes.values()):
         raise ValueError("runtime return-code inventory does not match required observations")
-    if set(markers) != set(MARKER_NAMES) or any(path.name != name for name, path in markers.items()):
-        raise ValueError("runtime marker inventory does not match required observations")
+    markers = {name: probe_dir / name for name in MARKER_NAMES}
     def read_marker(name: str) -> bytes:
         marker = markers[name]
         return marker.read_bytes() if marker.is_file() else b""
@@ -173,7 +172,6 @@ def sha256_file(path: Path) -> str:
 
 
 def write_manifest(evidence_path: Path, manifest_path: Path, archive_path: Path, contract_path: Path) -> None:
-    archive_sha256 = sha256_file(archive_path)
     evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
     contract = json.loads(contract_path.read_text(encoding="utf-8"))
     if evidence.get("schemaVersion") != "cfw.runtime-build/v2" or evidence.get("status") != "passed":
@@ -189,6 +187,7 @@ def write_manifest(evidence_path: Path, manifest_path: Path, archive_path: Path,
         raise ValueError("runtime evidence compatibility contract mismatch")
     if evidence.get("contractSha256") != hashlib.sha256(contract_path.read_bytes()).hexdigest():
         raise ValueError("runtime evidence compatibility contract digest mismatch")
+    archive_sha256 = sha256_file(archive_path)
     manifest = {
         "schemaVersion": "cfw.prepared-runtime-manifest/v1",
         "runtimeId": evidence["runtimeId"],
@@ -205,16 +204,19 @@ def write_manifest(evidence_path: Path, manifest_path: Path, archive_path: Path,
         "interfaces": contract["artifact"]["interfaces"],
         "status": evidence["status"],
     }
+    archive_path.with_name(archive_path.name + ".sha256").write_text(
+        f"{archive_sha256}  {archive_path.name}\n", encoding="utf-8"
+    )
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def named_values(items, converter):
+def parse_return_codes(items):
     result = {}
     for item in items:
         name, separator, value = item.partition("=")
         if not separator or not name or name in result:
             raise ValueError("missing or duplicate named observation")
-        result[name] = converter(value)
+        result[name] = int(value)
     return result
 
 
@@ -225,14 +227,14 @@ def main():
     evidence.add_argument("output", type=Path)
     evidence.add_argument("--logs", type=Path, required=True)
     evidence.add_argument("--return-code", action="append", default=[])
-    evidence.add_argument("--marker", action="append", default=[])
+    evidence.add_argument("--probe-dir", type=Path, required=True)
     manifest = commands.add_parser("manifest")
     for name in ("evidence", "output", "archive", "contract"):
         manifest.add_argument(name, type=Path)
     args = parser.parse_args()
     try:
         if args.command == "evidence":
-            passed = write_evidence(args.output, args.logs, named_values(args.marker, Path), named_values(args.return_code, int))
+            passed = write_evidence(args.output, args.logs, args.probe_dir, parse_return_codes(args.return_code))
             return 0 if passed else 70
         write_manifest(args.evidence, args.output, args.archive, args.contract)
     except (OSError, ValueError, KeyError) as exc:

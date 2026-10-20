@@ -794,13 +794,7 @@ python3 "$repo_root/compat/runtime_evidence.py" evidence "$metadata" --logs "$lo
   --return-code "prePwshDwmapi=$pwsh_dwmapi_rc" \
   --return-code "prePwshRpcrt4=$pwsh_rpcrt4_rc" \
   --return-code "prePwshMscoree=$pwsh_mscoree_rc" \
-  --marker "pwsh.txt=$pwsh_marker" \
-  --marker "prepared-finalizer.txt=$prepared_finalizer_marker" \
-  --marker "synchro-x64.txt=$synchro64_marker" \
-  --marker "synchro-x86.txt=$synchro32_marker" \
-  --marker "chocolatey-install.txt=$smoke_install_marker" \
-  --marker "chocolatey-uninstall.txt=$smoke_uninstall_marker" \
-  --marker "pwsh-evidence.txt=$pwsh_evidence"
+  --probe-dir "$probe_dir"
 
 mark_stage package-runtime
 # The universal desktop session creates this host-bound convenience link. It is
@@ -814,8 +808,6 @@ mkdir -p "$wine_prefix/.cfw"
 cp -f "$metadata" "$wine_prefix/.cfw/runtime.json"
 archive="$output_root/$artifact_name.tar.gz"
 "$repo_root/compat/package-runtime.sh" "$wine_prefix" "$archive"
-archive_sha256="$(sha256sum "$archive" | awk '{print $1}')"
-printf '%s  %s\n' "$archive_sha256" "$(basename "$archive")" > "$archive.sha256"
 
 python3 "$repo_root/compat/runtime_evidence.py" manifest "$metadata" "$manifest" "$archive" "$compat_contract"
 mark_stage complete

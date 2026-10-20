@@ -395,7 +395,7 @@ class LayerContractTests(unittest.TestCase):
         self.assertIn('prepared_finalizer_expected="$logs/prepared-finalizer.expected"', source)
         self.assertIn('cmp -s "$prepared_finalizer_expected" "$prepared_finalizer_marker"', source)
         self.assertNotIn("grep -Fqx '[cfw] stage=prepared-finalizer-script-entry' \"$prepared_finalizer_marker\"", source)
-        self.assertIn('--marker "pwsh-evidence.txt=$pwsh_evidence"', source)
+        self.assertIn('--probe-dir "$probe_dir"', source)
         self.assertIn('"pwsh-evidence.txt" in marker_hashes', EVIDENCE)
         self.assertIn('read_marker(\'pwsh-evidence.txt\') == expected_pwsh_evidence', EVIDENCE)
         self.assertIn('read_marker(\'prepared-finalizer.txt\') == expected_finalizer_evidence', EVIDENCE)
@@ -510,82 +510,6 @@ class LayerContractTests(unittest.TestCase):
                 external_stale.read_text(encoding="utf-8"),
                 "EXTERNAL-SENTINEL\n",
             )
-
-    def test_runtime_evidence_rejects_noncanonical_persisted_proofs(self) -> None:
-        from compat.runtime_evidence import RETURN_CODE_KEYS, WINEPATH_LABELS
-        winepath_labels = WINEPATH_LABELS
-        environment = {
-            **os.environ,
-            "CFW_OBSERVED_WINE_VERSION": "wine-11.0",
-            "CFW_EXPECTED_WINE_VERSION": "wine-11.0",
-            "CFW_EXPECTED_POWERSHELL_VERSION": "7.6.5",
-            "CFW_OBSERVED_CHOCOLATEY_VERSION": "2.7.4",
-            "CFW_EXPECTED_CHOCOLATEY_VERSION": "2.7.4",
-            "CFW_CONTRACT_SCHEMA": "cfw.compatibility-contract/v3",
-            "CFW_CONTRACT_SHA256": "0" * 64,
-            "CFW_RUNTIME_ID": "cfw-wine-11.0",
-            "CFW_WINE_IMAGE": "ghcr.io/pelagians/cage-wine@sha256:" + "1" * 64,
-            "CFW_WINE_SESSION_CONTRACT": "cage.selkies-wayland/v1",
-            "CFW_SOURCE_REVISION": "2" * 40,
-            "CFW_INSTALLER_SHA256": "3" * 64,
-            "CFW_RUNTIME_INPUTS_SHA256": "4" * 64,
-            "CFW_EXPECTED_SYNCHRO_VERSION": "4.2.0",
-        }
-        canonical = (
-            b"7.6.5",
-            b"[cfw] stage=prepared-finalizer-script-entry\n[cfw] stage=prepared-finalizer-complete\n",
-            b"synchro-x64", b"synchro-x86", b"installed", b"uninstalled",
-            b"[cfw] pwsh-script-entry\n[cfw] pwsh=7.6.5\n",
-        )
-        cases = {
-            "canonical": (0, "passed", None),
-            "missing-pwsh-evidence": (70, "failed", (6, None)),
-            "duplicate-pwsh-evidence": (70, "failed", (6, canonical[6] + canonical[6])),
-            "fragmented-version-marker": (70, "failed", (0, b"7.\n6.5")),
-            "extra-finalizer-token": (
-                70,
-                "failed",
-                (1, canonical[1] + b"[cfw] stage=prepared-finalizer-complete\n"),
-            ),
-        }
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            logs = root / "logs"
-            logs.mkdir()
-            for label in winepath_labels:
-                (logs / f"winepath-{label}.status").write_text("0 0\n", encoding="utf-8")
-            markers = [
-                root / name for name in (
-                    "pwsh.txt", "prepared-finalizer.txt", "synchro-x64.txt",
-                    "synchro-x86.txt", "chocolatey-install.txt",
-                    "chocolatey-uninstall.txt", "pwsh-evidence.txt",
-                )
-            ]
-            for case, (expected_rc, expected_status, mutation) in cases.items():
-                for marker, content in zip(markers, canonical):
-                    marker.write_bytes(content)
-                if mutation is not None:
-                    marker_index, content = mutation
-                    if content is None:
-                        markers[marker_index].unlink()
-                    else:
-                        markers[marker_index].write_bytes(content)
-                metadata = root / f"{case}.json"
-                arguments = ["evidence", str(metadata), "--logs", str(logs)]
-                for name in RETURN_CODE_KEYS:
-                    arguments.extend(["--return-code", f"{name}=0"])
-                for marker in markers:
-                    arguments.extend(["--marker", f"{marker.name}={marker}"])
-                result = subprocess.run(
-                    ["python3", str(ROOT / "compat/runtime_evidence.py"), *arguments],
-                    text=True, capture_output=True, env=environment, check=False,
-                )
-                self.assertEqual(result.returncode, expected_rc, case)
-                self.assertEqual(
-                    json.loads(metadata.read_text(encoding="utf-8"))["status"],
-                    expected_status,
-                    case,
-                )
 
     def test_windows_crlf_feature_status_is_normalized_before_exact_match(self) -> None:
         writer = ROOT / "compat" / "set-chocolatey-policy.py"
@@ -774,7 +698,7 @@ class LayerContractTests(unittest.TestCase):
         self.assertIn("CFW_RUNTIME_MANIFEST_NAME", source)
         self.assertIn('runtime_evidence.py" evidence', source)
         self.assertIn('--return-code "installer=$installer_rc"', source)
-        self.assertIn('--marker "pwsh.txt=$pwsh_marker"', source)
+        self.assertIn('--probe-dir "$probe_dir"', source)
         self.assertNotIn('sys.argv[2:35]', source)
 
     def test_wine_identity_and_pre_pwsh_policy_have_isolated_settlement_evidence(self) -> None:

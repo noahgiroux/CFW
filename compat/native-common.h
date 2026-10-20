@@ -35,17 +35,23 @@ static inline BOOL append_argument(wchar_t *command, size_t capacity, const wcha
     if(!capacity) return FALSE;
     used = wcslen(command);
     if(used) PUT(L' ');
-    PUT(L'"');
-    for(;;) {
-        slashes = 0;
-        while(*cursor == L'\\') { slashes++; cursor++; }
-        if(*cursor == L'"' || !*cursor) slashes *= 2;
-        while(slashes--) PUT(L'\\');
-        if(!*cursor) break;
-        if(*cursor == L'"') PUT(L'\\');
-        PUT(*cursor++);
+    /* Wine's msiexec parser preserves quotes around switches and properties. */
+    if(*argument && !wcspbrk(argument, L" \t\"")) {
+        while(*cursor) PUT(*cursor++);
     }
-    PUT(L'"');
+    else {
+        PUT(L'"');
+        for(;;) {
+            slashes = 0;
+            while(*cursor == L'\\') { slashes++; cursor++; }
+            if(*cursor == L'"' || !*cursor) slashes *= 2;
+            while(slashes--) PUT(L'\\');
+            if(!*cursor) break;
+            if(*cursor == L'"') PUT(L'\\');
+            PUT(*cursor++);
+        }
+        PUT(L'"');
+    }
     command[used] = 0;
 #undef PUT
     return TRUE;
