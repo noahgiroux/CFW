@@ -26,7 +26,9 @@
     "dotnet": {
       "url": "https://download.visualstudio.microsoft.com/download/pr/7afca223-55d2-470a-8edc-6a1739ae3252/abd170b4b0ec15ad0222a809b761a036/ndp48-x86-x64-allos-enu.exe",
       "sha256": "95889d6de3f2070c07790ad6cf2000d33d9a1bdfc6a381725ab82ab1c314fd53",
-      "filename": "ndp48-x86-x64-allos-enu.exe"
+      "filename": "ndp48-x86-x64-allos-enu.exe",
+      "installDirectory": "v4.8.03761",
+      "msiFilename": "netfx_Full_x64.msi"
     },
     "mscoree": {
       "url": "https://catalog.s.download.windowsupdate.com/msdownload/update/software/crup/2010/06/windows6.1-kb958488-v6001-x64_a137e4f328f01146dfa75d7b5a576090dee948dc.msu",

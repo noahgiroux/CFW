@@ -7,7 +7,16 @@ verify the released CFW artifact, seed it into an empty prefix, then perform
 application-specific package orchestration.
 
 The contract is [`contract.json`](contract.json). Producer inputs are locked in
-[`runtime-inputs.json`](runtime-inputs.json).
+[`runtime-inputs.json`](runtime-inputs.json). The native installer's Chocolatey,
+PowerShell, .NET, and auxiliary download URLs and filenames are generated from
+that lock into `installer-inputs.h`. Regenerate it with
+`python3 compat/runtime_inputs.py header > compat/installer-inputs.h`. CI rejects
+a stale generated header.
+
+`bash compat/compile-installer.sh OUTPUT.exe` is the shared MinGW build recipe
+for release packaging, compile checks, and Wine runtime qualification. Release
+packing retains its separate strip/UPX steps. Branch pull requests run the
+contract checks once; pushes to `main` and manual runs remain supported.
 
 ## Consumer boundary
 
@@ -94,6 +103,13 @@ revision so equivalent prepared prefixes produce byte-identical archives.
 Short-lived CI artifacts remain diagnostics only; they are not the consumer
 interface.
 
+`build-runtime.sh` collects the observations, then passes named return codes and
+marker paths to `runtime_evidence.py`. The writer rejects missing, duplicate,
+unknown, or mislabeled observations and checks the exact persisted proof bytes.
+Its manifest command binds the archive and evidence hashes to the authoritative
+contract. The public evidence and manifest schemas and required proof inventory
+remain unchanged.
+
 ## Profile composition
 
 The prepared runtime owns:
@@ -106,8 +122,11 @@ C:\ProgramData\Chocolatey-for-wine\profile.d\30-cfw-winetricks.ps1
 C:\ProgramData\Chocolatey-for-wine\profile.d\40-cfw-command-adapters.ps1
 ```
 
-The loader preserves the installer-generated legacy profile, then loads CFW
-fragments lexically. A consumer may add application-specific fragments only to:
+The fragment inventory and order come from `contract.json` through
+`profile-contract.ps1`. Finalization checks that the source and installed files
+match that inventory exactly; empty, duplicate, unordered, unsafe, missing, or
+extra fragments fail qualification. The loader preserves the installer-generated
+legacy profile, then loads CFW fragments lexically. A consumer may add application-specific fragments only to:
 
 ```text
 C:\ProgramData\Chocolatey-for-wine\application-profile.d
@@ -123,6 +142,13 @@ Chocolatey promotion/recovery utility. It validates an already-provided external
 layer and atomically promotes canonical Chocolatey state. It does not define the
 prepared-runtime interface and must not be used by consumers as a substitute for
 the released prefix artifact.
+
+The recovery utility and installer share bounded path validation, atomic
+Chocolatey bin promotion, and registry/process environment updates in
+`native-common.h`. The installer still installs CLR prerequisites and requires a
+fresh canonical destination; the utility still resumes staging or reconciles an
+existing installation. Commands use bounded Windows argument quoting, including
+cache and installation directories containing spaces.
 
 ## Legacy desktop installer
 

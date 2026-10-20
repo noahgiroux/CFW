@@ -6,3 +6,6 @@ Chocolatey-for-wine.7z
 7z-pkg/
 build_c_drive/
 release/
+
+# Python validation caches
+__pycache__/

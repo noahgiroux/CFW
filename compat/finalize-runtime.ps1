@@ -1,5 +1,6 @@
 param(
     [Parameter(Mandatory = $true)][string] $FragmentSource,
+    [Parameter(Mandatory = $true)][string] $ContractPath,
     [Parameter(Mandatory = $true)][string] $MarkerPath
 )
 
@@ -68,12 +69,8 @@ $profileRoot = Join-Path $env:ProgramData 'Chocolatey-for-wine\profile.d'
 $applicationProfileRoot = Join-Path $env:ProgramData 'Chocolatey-for-wine\application-profile.d'
 New-Item -ItemType Directory -Force -Path $profileRoot, $applicationProfileRoot | Out-Null
 
-$requiredFragments = @(
-    '10-runtime-contract.ps1',
-    '20-chocolatey.ps1',
-    '30-cfw-winetricks.ps1',
-    '40-cfw-command-adapters.ps1'
-)
+. (Join-Path $PSScriptRoot 'profile-contract.ps1')
+$requiredFragments = @(Get-CfwProfileFragments -ContractPath $ContractPath -FragmentSource $FragmentSource)
 foreach ($name in $requiredFragments) {
     $source = Join-Path $FragmentSource $name
     if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
@@ -81,6 +78,7 @@ foreach ($name in $requiredFragments) {
     }
     Copy-Item -LiteralPath $source -Destination (Join-Path $profileRoot $name) -Force
 }
+Get-CfwProfileFragments -ContractPath $ContractPath -FragmentSource $profileRoot | Out-Null
 Write-Diagnostic -Message "[cfw] stage=profile-fragments-installed`n"
 
 $pwshRoot = $PSHOME

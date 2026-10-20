@@ -12,6 +12,7 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
+EVIDENCE = (ROOT / "compat/runtime_evidence.py").read_text(encoding="utf-8")
 
 
 class LayerContractTests(unittest.TestCase):
@@ -367,13 +368,13 @@ class LayerContractTests(unittest.TestCase):
         self.assertIn('"${choco_package_launcher[@]}" install', source)
         self.assertIn('"${choco_package_launcher[@]}" uninstall', source)
         self.assertIn("cfw-runtime-prefix", source)
-        self.assertIn("cfw.runtime-build/v2", source)
-        self.assertIn('contract = json.loads(contract_path.read_text', source)
-        self.assertIn('required_proofs = contract["build"]["requiredProofs"]', source)
-        self.assertIn('set(evidence["checks"]) != set(required_proofs)', source)
-        self.assertNotIn('"requiredProofs": sorted(evidence["checks"])', source)
-        self.assertIn('"requiredProofs": required_proofs', source)
-        self.assertIn('"interfaces": contract["artifact"]["interfaces"]', source)
+        self.assertIn("cfw.runtime-build/v2", EVIDENCE)
+        self.assertIn('contract = json.loads(contract_path.read_text', EVIDENCE)
+        self.assertIn('required_proofs = contract["build"]["requiredProofs"]', EVIDENCE)
+        self.assertIn('set(evidence["checks"]) != set(required_proofs)', EVIDENCE)
+        self.assertNotIn('"requiredProofs": sorted(evidence["checks"])', EVIDENCE)
+        self.assertIn('"requiredProofs": required_proofs', EVIDENCE)
+        self.assertIn('"interfaces": contract["artifact"]["interfaces"]', EVIDENCE)
 
     def test_pwsh_boundaries_receive_a_real_wine_console(self) -> None:
         source = (ROOT / "compat" / "build-runtime.sh").read_text(encoding="utf-8")
@@ -394,10 +395,10 @@ class LayerContractTests(unittest.TestCase):
         self.assertIn('prepared_finalizer_expected="$logs/prepared-finalizer.expected"', source)
         self.assertIn('cmp -s "$prepared_finalizer_expected" "$prepared_finalizer_marker"', source)
         self.assertNotIn("grep -Fqx '[cfw] stage=prepared-finalizer-script-entry' \"$prepared_finalizer_marker\"", source)
-        self.assertIn('"$smoke_install_marker" "$smoke_uninstall_marker" "$pwsh_evidence"', source)
-        self.assertIn('"pwsh-evidence.txt" in marker_hashes', source)
-        self.assertIn('markers[6].read_bytes() == expected_pwsh_evidence', source)
-        self.assertIn('markers[1].read_bytes() == expected_finalizer_evidence', source)
+        self.assertIn('--marker "pwsh-evidence.txt=$pwsh_evidence"', source)
+        self.assertIn('"pwsh-evidence.txt" in marker_hashes', EVIDENCE)
+        self.assertIn('read_marker(\'pwsh-evidence.txt\') == expected_pwsh_evidence', EVIDENCE)
+        self.assertIn('read_marker(\'prepared-finalizer.txt\') == expected_finalizer_evidence', EVIDENCE)
         finalizer = (ROOT / "compat" / "finalize-runtime.ps1").read_text(encoding="utf-8")
         self.assertIn("[IO.File]::WriteAllText(", finalizer)
         self.assertIn("prepared-finalizer-script-entry`n[cfw] stage=prepared-finalizer-complete`n", finalizer)
@@ -511,18 +512,8 @@ class LayerContractTests(unittest.TestCase):
             )
 
     def test_runtime_evidence_rejects_noncanonical_persisted_proofs(self) -> None:
-        source = (ROOT / "compat" / "build-runtime.sh").read_text(encoding="utf-8")
-        anchor = 'path = Path(sys.argv[1])\nvalues = [int(value) for value in sys.argv[2:35]]'
-        anchor_index = source.index(anchor)
-        program_start = source.rfind("<<'PY2'\n", 0, anchor_index) + len("<<'PY2'\n")
-        program_end = source.index("\nPY2\n", anchor_index)
-        evidence_program = source[program_start:program_end]
-        winepath_labels = (
-            "cfw-cache", "cfw-installer", "pwsh-policy", "pwsh-executable",
-            "pwsh-probe-script", "pwsh-marker", "prepared-finalizer",
-            "profile-fragments", "prepared-finalizer-marker", "synchro-x64-marker",
-            "synchro-x86-marker", "smoke-feed",
-        )
+        from compat.runtime_evidence import RETURN_CODE_KEYS, WINEPATH_LABELS
+        winepath_labels = WINEPATH_LABELS
         environment = {
             **os.environ,
             "CFW_OBSERVED_WINE_VERSION": "wine-11.0",
@@ -580,17 +571,14 @@ class LayerContractTests(unittest.TestCase):
                     else:
                         markers[marker_index].write_bytes(content)
                 metadata = root / f"{case}.json"
-                arguments = [
-                    str(metadata), *("0" for _ in range(33)), str(logs),
-                    *(str(marker) for marker in markers),
-                ]
+                arguments = ["evidence", str(metadata), "--logs", str(logs)]
+                for name in RETURN_CODE_KEYS:
+                    arguments.extend(["--return-code", f"{name}=0"])
+                for marker in markers:
+                    arguments.extend(["--marker", f"{marker.name}={marker}"])
                 result = subprocess.run(
-                    ["python3", "-", *arguments],
-                    input=evidence_program,
-                    text=True,
-                    capture_output=True,
-                    env=environment,
-                    check=False,
+                    ["python3", str(ROOT / "compat/runtime_evidence.py"), *arguments],
+                    text=True, capture_output=True, env=environment, check=False,
                 )
                 self.assertEqual(result.returncode, expected_rc, case)
                 self.assertEqual(
@@ -640,9 +628,9 @@ class LayerContractTests(unittest.TestCase):
         self.assertIn('CFW_RUNTIME_ID="$(input_value runtimeId)"', source)
         self.assertIn('CFW_EXPECTED_POWERSHELL_VERSION="$(input_value versions powershell)"', source)
         self.assertIn('CFW_EXPECTED_CHOCOLATEY_VERSION="$(input_value versions chocolatey)"', source)
-        self.assertIn('observed_powershell = markers[0].read_text(encoding="utf-8")', source)
-        self.assertIn('"powershell": observed_powershell', source)
-        self.assertIn('"runtimeId": os.environ["CFW_RUNTIME_ID"]', source)
+        self.assertIn("observed_powershell = read_marker('pwsh.txt').decode", EVIDENCE)
+        self.assertIn('"powershell": observed_powershell', EVIDENCE)
+        self.assertIn('"runtimeId": os.environ["CFW_RUNTIME_ID"]', EVIDENCE)
 
     def test_prepared_runtime_finalizer_runs_after_first_pwsh_proof(self) -> None:
         source = (ROOT / "compat" / "build-runtime.sh").read_text(encoding="utf-8")
@@ -752,7 +740,7 @@ class LayerContractTests(unittest.TestCase):
         self.assertIn("ChoCinstaller-under-test.exe", source)
         self.assertIn("CFW_RUNTIME_INPUTS_SHA256", source)
         self.assertIn("CFW_INSTALLER_SHA256", source)
-        self.assertIn('"installerSha256"', source)
+        self.assertIn('"installerSha256"', EVIDENCE)
         self.assertIn("verify_checkout_source choc_install.ps1", source)
         self.assertIn("verify_checkout_source winetricks.ps1 \"$repo_root/winetricks.ps1\"", source)
         self.assertIn("verify_checkout_source winetricks.ps1 \"$winetricks_script\"", source)
@@ -777,16 +765,17 @@ class LayerContractTests(unittest.TestCase):
         self.assertIn("[cfw-smoke] install-script-executed", source)
         self.assertIn("[cfw-smoke] uninstall-script-executed", source)
         self.assertIn('cp -f "$chocolatey_runtime_log" "$logs/chocolatey-runtime.log"', source)
-        self.assertIn("featurePolicy", source)
+        self.assertIn("featurePolicy", EVIDENCE)
         self.assertIn("CFW_WINE_IMAGE", source)
         self.assertIn("CFW_SOURCE_REVISION must be the exact source commit", source)
         self.assertIn("must be a full lowercase Git commit SHA", source)
         self.assertIn("must be a ghcr.io/pelagians/cage-wine digest", source)
         self.assertIn("CFW_RUNTIME_EVIDENCE_NAME", source)
         self.assertIn("CFW_RUNTIME_MANIFEST_NAME", source)
-        self.assertIn("values = [int(value) for value in sys.argv[2:35]]", source)
-        self.assertIn("logs_path = Path(sys.argv[35])", source)
-        self.assertIn("markers = [Path(value) for value in sys.argv[36:]]", source)
+        self.assertIn('runtime_evidence.py" evidence', source)
+        self.assertIn('--return-code "installer=$installer_rc"', source)
+        self.assertIn('--marker "pwsh.txt=$pwsh_marker"', source)
+        self.assertNotIn('sys.argv[2:35]', source)
 
     def test_wine_identity_and_pre_pwsh_policy_have_isolated_settlement_evidence(self) -> None:
         source = (ROOT / "compat" / "build-runtime.sh").read_text(encoding="utf-8")
@@ -803,10 +792,10 @@ class LayerContractTests(unittest.TestCase):
             "pwsh_query_rc",
             "pwsh_query_settle_rc",
             "pwsh_mscoree_rc",
-            '"wineIdentity"',
-            '"prePwshPolicy"',
         ):
             self.assertIn(token, source)
+        self.assertIn('"wineIdentity"', EVIDENCE)
+        self.assertIn('"prePwshPolicy"', EVIDENCE)
         self.assertNotIn('subprocess.run(["wine", "--version"]', source)
         self.assertLess(source.index("winecfg /v win10"), source.index('pwsh_winecfg_settle_rc="$?"'))
         self.assertLess(source.index('pwsh_winecfg_settle_rc="$?"'), source.index('wine regedit /S'))
@@ -839,8 +828,8 @@ class LayerContractTests(unittest.TestCase):
         self.assertNotRegex(source, r'(?m)^(?!.*timeout).*\$\(winepath -w')
         for label in ("synchro-x64-marker", "synchro-x86-marker", "smoke-feed"):
             self.assertIn(f'winepath_to_windows {label}', source)
-        self.assertIn('"pathConversions"', source)
-        self.assertIn('"winepathReturnCodes"', source)
+        self.assertIn('"pathConversions"', EVIDENCE)
+        self.assertIn('"winepathReturnCodes"', EVIDENCE)
 
     def test_chocolatey_version_is_one_exact_observed_value(self) -> None:
         source = (ROOT / "compat" / "build-runtime.sh").read_text(encoding="utf-8")
@@ -861,7 +850,7 @@ class LayerContractTests(unittest.TestCase):
         self.assertIn("Chocolatey probe return codes", source)
         self.assertIn('[[ "$CFW_OBSERVED_CHOCOLATEY_VERSION" == "$CFW_EXPECTED_CHOCOLATEY_VERSION" ]]', source)
         self.assertNotIn('grep -Fqx "$CFW_EXPECTED_CHOCOLATEY_VERSION"', source)
-        self.assertIn('"chocolatey": os.environ["CFW_OBSERVED_CHOCOLATEY_VERSION"]', source)
+        self.assertIn('"chocolatey": os.environ["CFW_OBSERVED_CHOCOLATEY_VERSION"]', EVIDENCE)
 
         def parse_one(raw: str) -> str:
             lines = raw.replace("\r", "").splitlines()
@@ -1051,8 +1040,8 @@ class LayerContractTests(unittest.TestCase):
 
         self.assertEqual(contract["build"]["producerSessionContract"], "cage.selkies-wayland/v1")
         self.assertIn("CFW_WINE_SESSION_CONTRACT", builder)
-        self.assertIn('"sessionContract": os.environ["CFW_WINE_SESSION_CONTRACT"]', builder)
-        self.assertIn('"sessionContract": evidence["sessionContract"]', builder)
+        self.assertIn('"sessionContract": os.environ["CFW_WINE_SESSION_CONTRACT"]', EVIDENCE)
+        self.assertIn('"sessionContract": evidence["sessionContract"]', EVIDENCE)
         self.assertIn("CFW_WINE_SESSION_CONTRACT=cage.selkies-wayland/v1", workflow)
         self.assertIn('runtime["sessionContract"] == manifest["sessionContract"]', workflow)
         self.assertIn('manifest["sessionContract"] == contract["build"]["producerSessionContract"]', workflow)

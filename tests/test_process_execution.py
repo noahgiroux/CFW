@@ -14,7 +14,7 @@ class ProcessExecutionTests(unittest.TestCase):
         if compiler is None:
             self.skipTest("a host C compiler is required for the Windows API harness")
         source = (ROOT / "installer.c").read_text()
-        helpers = source[source.index("static DWORD run_process_bounded("):source.index("static DWORD download_file(")]
+        helpers = source[source.index("static DWORD run_process_bounded("):source.index("static DWORD run_argv(")]
         harness = r'''
 #include <assert.h>
 #include <stddef.h>

@@ -5,7 +5,7 @@ import subprocess
 import sys
 import unittest
 
-from compat.runtime_inputs import installer_header, locked_value
+from compat.runtime_inputs import INSTALLER_COMPONENTS, installer_header, locked_value
 
 ROOT = Path(__file__).resolve().parents[1]
 INPUTS = json.loads((ROOT / "compat/runtime-inputs.json").read_text())
@@ -22,6 +22,19 @@ class RuntimeInputTests(unittest.TestCase):
                 inputs["versions"][component] = "99.1.0"
                 with self.assertRaisesRegex(ValueError, "filename does not match"):
                     installer_header(inputs)
+
+    def test_all_native_bootstrap_downloads_come_from_the_lock(self):
+        header = installer_header(INPUTS)
+        for component in INSTALLER_COMPONENTS:
+            for field in ("url", "filename"):
+                value = INPUTS["downloads"][component][field]
+                self.assertIn(f"#define CFW_{component.upper()}_{field.upper()} L{json.dumps(value)}", header)
+        self.assertNotIn('https://', (ROOT / "installer.c").read_text())
+        for field in ("msiFilename", "installDirectory"):
+            inputs = deepcopy(INPUTS)
+            inputs["downloads"]["dotnet"][field] = "../escape"
+            with self.assertRaises(ValueError):
+                installer_header(inputs)
 
     def test_lookup_reads_all_runtime_input_sections(self):
         for keys in (

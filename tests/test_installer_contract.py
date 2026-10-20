@@ -6,6 +6,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER = (ROOT / "installer.c").read_text(encoding="utf-8")
+COMMON = (ROOT / "compat/native-common.h").read_text()
 MAIN = INSTALLER[INSTALLER.index("int mainCRTStartup") :]
 
 
@@ -61,8 +62,13 @@ class InstallerOrchestrationContractTests(unittest.TestCase):
         download = INSTALLER[INSTALLER.index("static DWORD download_file") : INSTALLER.index("static DWORD validate_canonical_choco")]
         self.assertIn('_wgetenv(L"CFW_OFFLINE")', download)
         self.assertLess(download.index('_wgetenv(L"CFW_OFFLINE")'), download.index("URLDownloadToFileW"))
-        self.assertIn("cached_dotnet", MAIN)
-        self.assertIn("CopyFileW(cached_dotnet", MAIN)
+        cache = INSTALLER[INSTALLER.index("static DWORD cached_payload") : INSTALLER.index("static DWORD validate_canonical_choco")]
+        self.assertIn("return require_file(path)", cache)
+        self.assertLess(cache.index("p->cache_dir"), cache.index("p->setupcache"))
+        net = INSTALLER[INSTALLER.index("DWORD WINAPI net48_install") : INSTALLER.index("DWORD WINAPI chocolatey_install")]
+        self.assertIn("CFW_DOTNET_MSI_FILENAME", net)
+        self.assertIn("CFW_DOTNET_INSTALL_DIRECTORY", net)
+        self.assertIn("cached_payload(p, CFW_DOTNET_URL", net)
 
     def test_container_builder_uses_native_canonical_promotion(self):
         pscore = INSTALLER[INSTALLER.index("DWORD WINAPI pscore_install") : INSTALLER.index("DWORD WINAPI cdrive_install")]
@@ -75,30 +81,20 @@ class InstallerOrchestrationContractTests(unittest.TestCase):
         native = INSTALLER[INSTALLER.index("static DWORD native_finalize_chocolatey") : INSTALLER.index("DWORD WINAPI net48_install")]
         self.assertIn('L"%ProgramData%\\\\tools\\\\chocolateyInstall"', native)
         self.assertIn('L"%ProgramData%\\\\chocolatey"', native)
-        self.assertIn("MoveFileExW", native)
-        self.assertIn("MOVEFILE_COPY_ALLOWED", native)
-        self.assertIn("MOVEFILE_REPLACE_EXISTING", native)
-        self.assertIn("FILE_ATTRIBUTE_REPARSE_POINT", native)
-        self.assertIn("ERROR_ALREADY_EXISTS", native)
-        self.assertIn('L"\\\\choco.exe"', native)
-        self.assertIn('L"\\\\bin\\\\choco.exe"', native)
-        self.assertIn('L".cfw-part"', native)
-        self.assertIn("CopyFileW(root_choco, staged_choco, TRUE)", native)
-        self.assertIn("GetFileAttributesW(canonical_choco)", native)
+        self.assertIn("move_chocolatey_tree(raw_root, canonical_root, MOVEFILE_COPY_ALLOWED | MOVEFILE_WRITE_THROUGH)", native)
+        self.assertIn("install_chocolatey_bin(canonical_root, FALSE)", native)
+        self.assertIn("set_chocolatey_environment(canonical_root, canonical_bin)", native)
+        for token in ("FILE_ATTRIBUTE_REPARSE_POINT", "ERROR_ALREADY_EXISTS", "CopyFileW(source_choco, part, !resume)", "MOVEFILE_REPLACE_EXISTING", "RegQueryValueExW", "SetEnvironmentVariableW"):
+            self.assertIn(token, COMMON)
+        recovery = (ROOT / "compat/container-finalizer.c").read_text()
+        self.assertIn("install_chocolatey_bin(stage_root, TRUE)", recovery)
+        self.assertIn("stage=stage-resume", recovery)
         self.assertNotIn("redirects", native)
-        self.assertIn("RegSetValueExW(", native)
-        self.assertIn('L"ChocolateyInstall"', native)
-        self.assertIn('L"Path"', native)
-        self.assertIn("RegQueryValueExW", native)
-        self.assertIn("ExpandEnvironmentStringsW(", native)
-        self.assertIn("machine_path,", native)
-        self.assertIn("process_path,", native)
-        self.assertIn("SetEnvironmentVariableW", native)
         self.assertIn('L"Software\\\\Wine\\\\DllOverrides"', native)
         self.assertIn('L"mscoree"', native)
         self.assertIn('L"native"', native)
-        self.assertIn('L"wusa.exe \\""', native)
-        self.assertIn("run_process_bounded(NULL, mscoree_command, 0, 180000)", native)
+        self.assertIn('L"wusa.exe"', native)
+        self.assertIn("run_argv(NULL, mscoree_arguments, 0, 180000)", native)
         self.assertIn("result != ERROR_TIMEOUT", native)
         self.assertIn('L"%SystemRoot%\\\\System32\\\\mscoree.dll"', native)
         self.assertIn('L"%SystemRoot%\\\\SysWOW64\\\\mscoree.dll"', native)
@@ -127,7 +123,7 @@ class InstallerOrchestrationContractTests(unittest.TestCase):
             "canonical-check",
             "bootstrap-complete",
         )
-        self.assertIn("static void log_stage", INSTALLER)
+        self.assertIn("static inline void log_stage", COMMON)
         for stage in stages:
             self.assertIn(f'log_stage("[cfw] stage={stage}\\n")', INSTALLER)
 
@@ -150,13 +146,13 @@ class InstallerOrchestrationContractTests(unittest.TestCase):
 
     def test_powershell_finalizer_command_has_argv0_and_explicit_file_mode(self):
         pscore = INSTALLER[INSTALLER.index("DWORD WINAPI pscore_install") : INSTALLER.index("DWORD WINAPI cdrive_install")]
-        self.assertIn("append_wide(", pscore)
-        self.assertIn("expanded_path_length", pscore)
-        self.assertIn("expanded_path_length > MAX_PATH", pscore)
+        self.assertIn('expand_path(L"%ProgramFiles%', pscore)
+        self.assertIn('L"-NoLogo", L"-NonInteractive", L"-File", script, p->pathW', pscore)
+        self.assertIn('const wchar_t *finalize[] = {pwsh,', pscore)
+        self.assertIn("run_argv(pwsh, finalize, 0, INFINITE)", pscore)
+        self.assertIn("build_command(command, sizeof(command)", INSTALLER)
+        self.assertNotIn("wcscat(", INSTALLER)
         self.assertNotIn("swprintf(", pscore)
-        self.assertIn('L"\\\" -NoLogo -NonInteractive -File \\\""', pscore)
-        self.assertIn('L"\\\\choc_install.ps1\\\" \\\""', pscore)
-        self.assertIn("ERROR_INSUFFICIENT_BUFFER", pscore)
         self.assertIn('_wcsicmp(argv[i], L"/s")', MAIN)
         self.assertIn('_wcsicmp(argv[i], L"/q")', MAIN)
         script = (ROOT / "choc_install.ps1").read_text(encoding="utf-8")

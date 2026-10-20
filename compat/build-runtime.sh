@@ -515,6 +515,7 @@ mark_stage finalize-prepared-runtime
 prepared_finalizer="$repo_root/compat/finalize-runtime.ps1"
 prepared_finalizer_win="$(winepath_to_windows prepared-finalizer "$prepared_finalizer")"
 profile_fragments_win="$(winepath_to_windows profile-fragments "$repo_root/compat/profile.d")"
+compat_contract_win="$(winepath_to_windows compatibility-contract "$compat_contract")"
 prepared_finalizer_marker="$probe_dir/prepared-finalizer.txt"
 prepared_finalizer_marker_win="$(winepath_to_windows prepared-finalizer-marker "$prepared_finalizer_marker")"
 prepared_finalizer_diagnostic="$probe_dir/prepared-finalizer-diagnostic.txt"
@@ -525,7 +526,7 @@ printf '[cfw] stage=prepared-finalizer-script-entry\n[cfw] stage=prepared-finali
 trap - ERR
 set +e
 timeout --kill-after=15s 300s "${pwsh_launcher[@]}" -NoLogo -NoProfile -NonInteractive \
-  -File "$prepared_finalizer_win" -FragmentSource "$profile_fragments_win" -MarkerPath "$prepared_finalizer_marker_win" \
+  -File "$prepared_finalizer_win" -FragmentSource "$profile_fragments_win" -ContractPath "$compat_contract_win" -MarkerPath "$prepared_finalizer_marker_win" \
   >"$logs/prepared-finalizer.log" 2>&1
 prepared_finalizer_rc="$?"
 timeout --kill-after=10s 120s wineserver -w >>"$logs/prepared-finalizer.log" 2>&1
@@ -759,110 +760,47 @@ set -e
 trap on_error ERR
 export CFW_OBSERVED_CHOCOLATEY_VERSION
 
-python3 - "$metadata" \
-  "$installer_rc" "$installer_settle_rc" "$pwsh_rc" "$pwsh_settle_rc" \
-  "$prepared_finalizer_rc" "$prepared_finalizer_settle_rc" \
-  "$feature_policy_seed_rc" \
-  "$feature_status_command_rc" "$feature_status_settle_rc" "$feature_status_rc" \
-  "$choco_rc" "$choco_settle_rc" "$choco_version_rc" \
-  "$synchro64_rc" "$synchro64_settle_rc" "$synchro32_rc" "$synchro32_settle_rc" \
-  "$smoke_install_rc" "$smoke_install_settle_rc" "$smoke_uninstall_rc" "$smoke_uninstall_settle_rc" \
-  "$wine_version_rc" "$wine_version_settle_rc" \
-  "$pwsh_winecfg_rc" "$pwsh_winecfg_settle_rc" "$pwsh_regedit_rc" "$pwsh_regedit_settle_rc" \
-  "$pwsh_query_rc" "$pwsh_query_settle_rc" "$pwsh_amsi_rc" "$pwsh_dwmapi_rc" "$pwsh_rpcrt4_rc" "$pwsh_mscoree_rc" \
-  "$logs" "$pwsh_marker" "$prepared_finalizer_marker" "$synchro64_marker" "$synchro32_marker" \
-  "$smoke_install_marker" "$smoke_uninstall_marker" "$pwsh_evidence" <<'PY2'
-import hashlib
-import json
-import os
-import sys
-from pathlib import Path
-
-path = Path(sys.argv[1])
-values = [int(value) for value in sys.argv[2:35]]
-logs_path = Path(sys.argv[35])
-markers = [Path(value) for value in sys.argv[36:]]
-keys = [
-    "installer", "installerSettle", "pwsh", "pwshSettle", "preparedFinalizer",
-    "preparedFinalizerSettle", "featurePolicySeed", "featurePolicyStatusCommand",
-    "featurePolicyStatusSettle", "featurePolicyStatus",
-    "chocolateyVersionCommand", "chocolateyVersionSettle",
-    "chocolateyVersion", "synchroX64", "synchroX64Settle", "synchroX86",
-    "synchroX86Settle", "smokeInstall", "smokeInstallSettle", "smokeUninstall",
-    "smokeUninstallSettle", "wineVersionCommand", "wineVersionSettle",
-    "prePwshWinecfg", "prePwshWinecfgSettle", "prePwshRegedit", "prePwshRegeditSettle",
-    "prePwshQuery", "prePwshQuerySettle", "prePwshAmsi", "prePwshDwmapi",
-    "prePwshRpcrt4", "prePwshMscoree",
-]
-return_codes = dict(zip(keys, values))
-winepath_labels = (
-    "cfw-cache", "cfw-installer", "pwsh-policy", "pwsh-executable",
-    "pwsh-probe-script", "pwsh-marker", "prepared-finalizer",
-    "profile-fragments", "prepared-finalizer-marker", "synchro-x64-marker",
-    "synchro-x86-marker", "smoke-feed",
-)
-winepath_return_codes = {}
-for label in winepath_labels:
-    status = logs_path / f"winepath-{label}.status"
-    parts = status.read_text(encoding="utf-8").split()
-    if len(parts) != 2:
-        raise SystemExit(f"invalid Wine path status: {label}")
-    winepath_return_codes[label] = {"command": int(parts[0]), "settle": int(parts[1])}
-marker_hashes = {
-    marker.name: hashlib.sha256(marker.read_bytes()).hexdigest()
-    for marker in markers
-    if marker.is_file() and marker.stat().st_size > 0
-}
-observed_powershell = markers[0].read_text(encoding="utf-8")
-expected_pwsh_evidence = (
-    "[cfw] pwsh-script-entry\n"
-    f"[cfw] pwsh={os.environ['CFW_EXPECTED_POWERSHELL_VERSION']}\n"
-).encode("utf-8")
-expected_finalizer_evidence = (
-    b"[cfw] stage=prepared-finalizer-script-entry\n"
-    b"[cfw] stage=prepared-finalizer-complete\n"
-)
-checks = {
-    "wineIdentity": values[21] == 0 and values[22] == 0 and os.environ["CFW_OBSERVED_WINE_VERSION"] == os.environ["CFW_EXPECTED_WINE_VERSION"],
-    "installer": values[0] == 0 and values[1] == 0,
-    "prePwshPolicy": all(value == 0 for value in values[23:33]),
-    "pathConversions": all(
-        codes["command"] == 0 and codes["settle"] == 0
-        for codes in winepath_return_codes.values()
-    ),
-    "pwsh": values[2] == 0 and values[3] == 0 and observed_powershell == os.environ["CFW_EXPECTED_POWERSHELL_VERSION"] and "pwsh.txt" in marker_hashes and "pwsh-evidence.txt" in marker_hashes and markers[6].read_bytes() == expected_pwsh_evidence,
-    "preparedFinalizer": values[4] == 0 and values[5] == 0 and "prepared-finalizer.txt" in marker_hashes and markers[1].read_bytes() == expected_finalizer_evidence,
-    "featurePolicy": all(value == 0 for value in values[6:10]),
-    "chocolatey": values[10] == 0 and values[11] == 0 and values[12] == 0 and os.environ["CFW_OBSERVED_CHOCOLATEY_VERSION"] == os.environ["CFW_EXPECTED_CHOCOLATEY_VERSION"],
-    "synchroX64": values[13] == 0 and values[14] == 0 and "synchro-x64.txt" in marker_hashes,
-    "synchroX86": values[15] == 0 and values[16] == 0 and "synchro-x86.txt" in marker_hashes,
-    "chocolateyLifecycle": values[17] == 0 and values[18] == 0 and values[19] == 0 and values[20] == 0 and "chocolatey-install.txt" in marker_hashes and "chocolatey-uninstall.txt" in marker_hashes,
-}
-record = {
-    "schemaVersion": "cfw.runtime-build/v2",
-    "provider": "cfw-chocolatey-runtime",
-    "contract": os.environ["CFW_CONTRACT_SCHEMA"],
-    "contractSha256": os.environ["CFW_CONTRACT_SHA256"],
-    "runtimeId": os.environ["CFW_RUNTIME_ID"],
-    "status": "passed" if all(checks.values()) else "failed",
-    "wine": {"image": os.environ["CFW_WINE_IMAGE"], "version": os.environ["CFW_OBSERVED_WINE_VERSION"], "architecture": "win64"},
-    "sessionContract": os.environ["CFW_WINE_SESSION_CONTRACT"],
-    "sourceRevision": os.environ["CFW_SOURCE_REVISION"],
-    "installerSha256": os.environ["CFW_INSTALLER_SHA256"],
-    "runtimeInputsSha256": os.environ["CFW_RUNTIME_INPUTS_SHA256"],
-    "profileLoader": {"path": "C:\\Program Files\\PowerShell\\7\\profile.ps1", "applicationExtensionPath": "C:\\ProgramData\\Chocolatey-for-wine\\application-profile.d"},
-    "powershell": observed_powershell,
-    "synchro": "v" + os.environ["CFW_EXPECTED_SYNCHRO_VERSION"],
-    "chocolatey": os.environ["CFW_OBSERVED_CHOCOLATEY_VERSION"],
-    "checks": checks,
-    "returnCodes": return_codes,
-    "winepathReturnCodes": winepath_return_codes,
-    "markerSha256": marker_hashes,
-}
-path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-if record["status"] != "passed":
-    raise SystemExit(70)
-PY2
+python3 "$repo_root/compat/runtime_evidence.py" evidence "$metadata" --logs "$logs" \
+  --return-code "installer=$installer_rc" \
+  --return-code "installerSettle=$installer_settle_rc" \
+  --return-code "pwsh=$pwsh_rc" \
+  --return-code "pwshSettle=$pwsh_settle_rc" \
+  --return-code "preparedFinalizer=$prepared_finalizer_rc" \
+  --return-code "preparedFinalizerSettle=$prepared_finalizer_settle_rc" \
+  --return-code "featurePolicySeed=$feature_policy_seed_rc" \
+  --return-code "featurePolicyStatusCommand=$feature_status_command_rc" \
+  --return-code "featurePolicyStatusSettle=$feature_status_settle_rc" \
+  --return-code "featurePolicyStatus=$feature_status_rc" \
+  --return-code "chocolateyVersionCommand=$choco_rc" \
+  --return-code "chocolateyVersionSettle=$choco_settle_rc" \
+  --return-code "chocolateyVersion=$choco_version_rc" \
+  --return-code "synchroX64=$synchro64_rc" \
+  --return-code "synchroX64Settle=$synchro64_settle_rc" \
+  --return-code "synchroX86=$synchro32_rc" \
+  --return-code "synchroX86Settle=$synchro32_settle_rc" \
+  --return-code "smokeInstall=$smoke_install_rc" \
+  --return-code "smokeInstallSettle=$smoke_install_settle_rc" \
+  --return-code "smokeUninstall=$smoke_uninstall_rc" \
+  --return-code "smokeUninstallSettle=$smoke_uninstall_settle_rc" \
+  --return-code "wineVersionCommand=$wine_version_rc" \
+  --return-code "wineVersionSettle=$wine_version_settle_rc" \
+  --return-code "prePwshWinecfg=$pwsh_winecfg_rc" \
+  --return-code "prePwshWinecfgSettle=$pwsh_winecfg_settle_rc" \
+  --return-code "prePwshRegedit=$pwsh_regedit_rc" \
+  --return-code "prePwshRegeditSettle=$pwsh_regedit_settle_rc" \
+  --return-code "prePwshQuery=$pwsh_query_rc" \
+  --return-code "prePwshQuerySettle=$pwsh_query_settle_rc" \
+  --return-code "prePwshAmsi=$pwsh_amsi_rc" \
+  --return-code "prePwshDwmapi=$pwsh_dwmapi_rc" \
+  --return-code "prePwshRpcrt4=$pwsh_rpcrt4_rc" \
+  --return-code "prePwshMscoree=$pwsh_mscoree_rc" \
+  --marker "pwsh.txt=$pwsh_marker" \
+  --marker "prepared-finalizer.txt=$prepared_finalizer_marker" \
+  --marker "synchro-x64.txt=$synchro64_marker" \
+  --marker "synchro-x86.txt=$synchro32_marker" \
+  --marker "chocolatey-install.txt=$smoke_install_marker" \
+  --marker "chocolatey-uninstall.txt=$smoke_uninstall_marker" \
+  --marker "pwsh-evidence.txt=$pwsh_evidence"
 
 mark_stage package-runtime
 # The universal desktop session creates this host-bound convenience link. It is
@@ -879,48 +817,6 @@ archive="$output_root/$artifact_name.tar.gz"
 archive_sha256="$(sha256sum "$archive" | awk '{print $1}')"
 printf '%s  %s\n' "$archive_sha256" "$(basename "$archive")" > "$archive.sha256"
 
-python3 - "$metadata" "$manifest" "$archive" "$archive_sha256" "$compat_contract" <<'PY2'
-import hashlib
-import json
-import os
-import sys
-from pathlib import Path
-
-evidence_path = Path(sys.argv[1])
-manifest_path = Path(sys.argv[2])
-archive_path = Path(sys.argv[3])
-archive_sha256 = sys.argv[4]
-contract_path = Path(sys.argv[5])
-evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
-contract = json.loads(contract_path.read_text(encoding="utf-8"))
-required_proofs = contract["build"]["requiredProofs"]
-if not isinstance(required_proofs, list) or not required_proofs or len(required_proofs) != len(set(required_proofs)):
-    raise SystemExit("invalid authoritative proof inventory")
-if set(evidence["checks"]) != set(required_proofs):
-    raise SystemExit("runtime evidence proof inventory does not match compatibility contract")
-if any(evidence["checks"][proof] is not True for proof in required_proofs):
-    raise SystemExit("runtime evidence contains an unproven contract requirement")
-if evidence.get("contract") != contract.get("schemaVersion"):
-    raise SystemExit("runtime evidence compatibility contract mismatch")
-if evidence.get("contractSha256") != hashlib.sha256(contract_path.read_bytes()).hexdigest():
-    raise SystemExit("runtime evidence compatibility contract digest mismatch")
-manifest = {
-    "schemaVersion": "cfw.prepared-runtime-manifest/v1",
-    "runtimeId": evidence["runtimeId"],
-    "contract": evidence["contract"],
-    "contractSha256": evidence["contractSha256"],
-    "archive": {"filename": archive_path.name, "sha256": archive_sha256, "bytes": archive_path.stat().st_size},
-    "runtimeEvidence": {"filename": evidence_path.name, "sha256": hashlib.sha256(evidence_path.read_bytes()).hexdigest()},
-    "sourceRevision": evidence["sourceRevision"],
-    "installerSha256": evidence["installerSha256"],
-    "runtimeInputsSha256": evidence["runtimeInputsSha256"],
-    "wine": evidence["wine"],
-    "sessionContract": evidence["sessionContract"],
-    "requiredProofs": required_proofs,
-    "interfaces": contract["artifact"]["interfaces"],
-    "status": evidence["status"],
-}
-manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-PY2
+python3 "$repo_root/compat/runtime_evidence.py" manifest "$metadata" "$manifest" "$archive" "$compat_contract"
 mark_stage complete
 printf '[cfw] runtime artifact ready: %s\n' "$archive"

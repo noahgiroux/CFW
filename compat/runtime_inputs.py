@@ -10,6 +10,8 @@ import re
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parent
+BOOTSTRAP_COMPONENTS = ("mscoree", "d3d64", "d3d32", "conemu", "sevenZipExtractor", "windowsPowerShell")
+INSTALLER_COMPONENTS = ("chocolatey", "powershell", "dotnet", *BOOTSTRAP_COMPONENTS)
 
 
 def locked_value(inputs: dict, *keys: str) -> str:
@@ -29,7 +31,7 @@ def locked_value(inputs: dict, *keys: str) -> str:
         raise ValueError(f"invalid runtime version {'.'.join(keys)}")
     if keys == ("runtimeId",) and not re.fullmatch(r"[A-Za-z0-9._-]+", value):
         raise ValueError("invalid runtimeId")
-    if keys[-1] in {"filename", "installerFilename"} and (
+    if keys[-1] in {"filename", "installerFilename", "msiFilename", "installDirectory"} and (
         value in {".", ".."} or not re.fullmatch(r"[A-Za-z0-9._-]+", value)
     ):
         raise ValueError(f"invalid runtime filename {'.'.join(keys)}")
@@ -46,15 +48,23 @@ def installer_header(inputs: dict) -> str:
         "#ifndef CFW_INSTALLER_INPUTS_H",
         "#define CFW_INSTALLER_INPUTS_H",
     ]
-    for component in ("chocolatey", "powershell"):
-        version = locked_value(inputs, "versions", component)
-        filename = locked_value(inputs, "downloads", component, "filename")
-        expected = f"chocolatey.{version}.nupkg" if component == "chocolatey" else f"PowerShell-{version}-win-x64.msi"
-        if filename != expected:
-            raise ValueError(f"{component} package filename does not match locked version")
+    for component in INSTALLER_COMPONENTS:
+        if component in ("chocolatey", "powershell"):
+            version = locked_value(inputs, "versions", component)
+            filename = locked_value(inputs, "downloads", component, "filename")
+            expected = f"chocolatey.{version}.nupkg" if component == "chocolatey" else f"PowerShell-{version}-win-x64.msi"
+            if filename != expected:
+                raise ValueError(f"{component} package filename does not match locked version")
         for field in ("url", "filename"):
             value = locked_value(inputs, "downloads", component, field)
             lines.append(f"#define CFW_{component.upper()}_{field.upper()} L{json.dumps(value)}")
+    for field, macro in (("installDirectory", "INSTALL_DIRECTORY"), ("msiFilename", "MSI_FILENAME")):
+        value = locked_value(inputs, "downloads", "dotnet", field)
+        lines.append(f"#define CFW_DOTNET_{macro} L{json.dumps(value)}")
+    lines.append("#define CFW_AUXILIARY_DOWNLOADS " + chr(92))
+    for index, component in enumerate(BOOTSTRAP_COMPONENTS):
+        suffix = ", " + chr(92) if index + 1 < len(BOOTSTRAP_COMPONENTS) else ""
+        lines.append(f"    {{CFW_{component.upper()}_URL, CFW_{component.upper()}_FILENAME}}" + suffix)
     return "\n".join([*lines, "#endif", ""])
 
 
