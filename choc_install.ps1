@@ -552,7 +552,7 @@ Remove-Variable ntdll_so,MethodDefinition2,MethodDefinition,MethodDefinition0,nt
         if ($powerShellCacheFiles.Count -ne 1) {
             throw "Expected exactly one PowerShell x64 MSI in setup cache; found $($powerShellCacheFiles.Count)"
         }
-        $cacheFiles = @($powerShellCacheFiles[0].Name, 'd3dcompiler_47.dll', 'd3dcompiler_47_32.dll', 'windows6.1-kb958488-v6001-x64_a137e4f328f01146dfa75d7b5a576090dee948dc.msu', '7z2409-x64.exe', 'sevenzipextractor.1.0.19.nupkg', 'ConEmuPack.230724.7z', 'windowsserver2003-kb968930-x64-eng_8ba702aa016e4c5aed581814647f4d55635eff5c.exe', 'chocolatey.2.6.0.nupkg')
+        $cacheFiles = @($powerShellCacheFiles[0].Name, 'd3dcompiler_47.dll', 'd3dcompiler_47_32.dll', 'windows6.1-kb958488-v6001-x64_a137e4f328f01146dfa75d7b5a576090dee948dc.msu', '7z2409-x64.exe', 'sevenzipextractor.1.0.19.nupkg', 'ConEmuPack.230724.7z', 'windowsserver2003-kb968930-x64-eng_8ba702aa016e4c5aed581814647f4d55635eff5c.exe', 'chocolatey.2.7.4.nupkg')
         foreach($i in $cacheFiles) {
             Move-Item -Path "$setupcache\\$i" -Destination "$cachedir" -force -ErrorAction SilentlyContinue}
         #Copy-Item -Path "$env:TEMP\choc_inst_files\v4.8.03761" -Destination "$cachedir\choc_install_files\".substring(4) -recurse -force

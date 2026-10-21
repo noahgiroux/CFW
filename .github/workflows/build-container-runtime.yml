@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - agent/integrated-container-runtime
     tags:
       - cfw-runtime-v*
     paths:
@@ -12,6 +11,7 @@ on:
       - 'installer.c'
       - 'choc_install.ps1'
       - 'winetricks.ps1'
+      - 'tests/test-profile-contract.ps1'
       - '.github/workflows/build-container-runtime.yml'
   pull_request:
     paths:
@@ -19,6 +19,7 @@ on:
       - 'installer.c'
       - 'choc_install.ps1'
       - 'winetricks.ps1'
+      - 'tests/test-profile-contract.ps1'
       - '.github/workflows/build-container-runtime.yml'
   workflow_dispatch:
     inputs:
@@ -48,6 +49,9 @@ jobs:
       - name: Test winetricks helper behavior
         shell: pwsh
         run: ./tests/test-winetricks-functions.ps1
+      - name: Test profile contract behavior
+        shell: pwsh
+        run: ./tests/test-profile-contract.ps1
       - name: Read Wine candidates
         id: contract
         shell: bash
@@ -99,14 +103,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y gcc-mingw-w64-x86-64
-          x86_64-w64-mingw32-gcc -O2 -fno-ident -fno-stack-protector -fomit-frame-pointer \
-            -fno-unwind-tables -fno-asynchronous-unwind-tables -mconsole -municode \
-            -mno-stack-arg-probe -Xlinker --stack=0x200000,0x200000 -nostdlib -Wall -Wextra \
-            -finline-limit=64 -Wl,-gc-sections installer.c -lurlmon -lkernel32 -lucrtbase \
-            -luser32 -nostdlib -ladvapi32 -lntdll -lshell32 -lole32 -luuid -s \
-            -Wl,--major-subsystem-version,6,--minor-subsystem-version,0 \
-            -o compat/ChoCinstaller-under-test.exe
-          test -s compat/ChoCinstaller-under-test.exe
+          bash compat/compile-installer.sh compat/ChoCinstaller-under-test.exe
 
       - name: Reject non-digest manual image
         if: github.event_name == 'workflow_dispatch' && inputs.wine_image != ''
@@ -237,7 +234,7 @@ jobs:
                 echo '--- runtime evidence ---'
                 python3 -c 'import json,sys; from pathlib import Path; p=json.loads(Path(sys.argv[1]).read_text(encoding="utf-8")); print(json.dumps({"status":p.get("status"),"checks":p.get("checks",{}),"returnCodes":p.get("returnCodes",{}),"markers":sorted(p.get("markerSha256",{}))},sort_keys=True))' "$evidence"
               fi
-              for name in build-stages installer-under-test.sha256 pwsh-policy pwsh-proof-summary pwsh-probe pwsh-host-probe pwsh-host-trace dotnet-host-trace pwsh-failure-trace prepared-finalizer prepared-finalizer-diagnostic chocolatey-type-dependencies chocolatey-type-dependency-inventory chocolatey-policy-write chocolatey-runtime choco-feature-status choco-version choco-version-direct choco-loader-probe-compile choco-loader-probe choco-version-diagnostic synchro-x64 synchro-x86 choco-smoke-install choco-smoke-uninstall winepath-cfw-cache winepath-cfw-installer winepath-pwsh-policy winepath-pwsh-executable winepath-pwsh-probe-script winepath-pwsh-marker winepath-prepared-finalizer winepath-profile-fragments winepath-prepared-finalizer-marker wineboot; do
+              for name in build-stages installer-under-test.sha256 pwsh-policy pwsh-proof-summary pwsh-probe pwsh-host-probe pwsh-host-trace dotnet-host-trace pwsh-failure-trace prepared-finalizer prepared-finalizer-diagnostic chocolatey-type-dependencies chocolatey-type-dependency-inventory chocolatey-policy-write chocolatey-runtime choco-feature-status choco-version choco-version-direct choco-loader-probe-compile choco-loader-probe choco-version-diagnostic synchro-x64 synchro-x86 choco-smoke-install choco-smoke-uninstall winepath-cfw-cache winepath-cfw-installer winepath-pwsh-policy winepath-pwsh-executable winepath-pwsh-probe-script winepath-pwsh-marker winepath-prepared-finalizer winepath-profile-fragments winepath-compatibility-contract winepath-prepared-finalizer-marker wineboot; do
                 path="$logs/${name}.log"
                 if [ -f "$path" ]; then
                   echo "--- ${name}.log (tail) ---"

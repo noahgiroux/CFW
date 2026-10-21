@@ -1,8 +1,8 @@
 {
   "schemaVersion": "cfw.runtime-inputs/v1",
-  "runtimeId": "cfw-chocolatey-2.6.0-powershell-7.6.5-synchro-4.2.0",
+  "runtimeId": "cfw-chocolatey-2.7.4-powershell-7.6.5-synchro-4.2.0",
   "versions": {
-    "chocolatey": "2.6.0",
+    "chocolatey": "2.7.4",
     "powershell": "7.6.5",
     "synchro": "4.2.0"
   },
@@ -14,9 +14,9 @@
       "installerFilename": "ChoCinstaller_0.5a.765.exe"
     },
     "chocolatey": {
-      "url": "https://community.chocolatey.org/api/v2/package/chocolatey/2.6.0",
-      "sha256": "f13a2af9cd4ec2c9b58d81861bc95ad7151e3a871d8f758dffa72a996a3792d8",
-      "filename": "chocolatey.2.6.0.nupkg"
+      "url": "https://community.chocolatey.org/api/v2/package/chocolatey/2.7.4",
+      "sha256": "aec2dbd6ce91b7378eb4a0c21524e748d30332ea856e898404999f77328bd504",
+      "filename": "chocolatey.2.7.4.nupkg"
     },
     "powershell": {
       "url": "https://github.com/PowerShell/PowerShell/releases/download/v7.6.5/PowerShell-7.6.5-win-x64.msi",
@@ -26,7 +26,9 @@
     "dotnet": {
       "url": "https://download.visualstudio.microsoft.com/download/pr/7afca223-55d2-470a-8edc-6a1739ae3252/abd170b4b0ec15ad0222a809b761a036/ndp48-x86-x64-allos-enu.exe",
       "sha256": "95889d6de3f2070c07790ad6cf2000d33d9a1bdfc6a381725ab82ab1c314fd53",
-      "filename": "ndp48-x86-x64-allos-enu.exe"
+      "filename": "ndp48-x86-x64-allos-enu.exe",
+      "installDirectory": "v4.8.03761",
+      "msiFilename": "netfx_Full_x64.msi"
     },
     "mscoree": {
       "url": "https://catalog.s.download.windowsupdate.com/msdownload/update/software/crup/2010/06/windows6.1-kb958488-v6001-x64_a137e4f328f01146dfa75d7b5a576090dee948dc.msu",
@@ -71,7 +73,7 @@
   },
   "checkoutSources": {
     "choc_install.ps1": {
-      "sha256": "de70fc77f15d08a076a6f2f47a7d66403e233d63b4a0651c3615e1dfc602315a"
+      "sha256": "dff942bef3de821b218f28646b99d90a68321b78a0bb15005c8283d0fa9ce7bf"
     },
     "winetricks.ps1": {
       "sha256": "b66d2967e9e0926460323d77da0b595333392e14ffaac11c6199346a855bffb2"

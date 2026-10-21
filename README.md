@@ -27,8 +27,8 @@ The machine-readable contract is [`compat/contract.json`](compat/contract.json).
 This branch selectively integrates canonical upstream release `v0.5c.765` at
 commit `71bf92916b8d259458017a583a37dfde330b241e`. Its release archive and the
 PowerShell 7.6.5 MSI are checksum-pinned in
-[`compat/runtime-inputs.json`](compat/runtime-inputs.json). Chocolatey remains at
-2.6.0, which was already the prepared-runtime version in this fork. The small
+[`compat/runtime-inputs.json`](compat/runtime-inputs.json). Chocolatey is
+independently pinned to 2.7.4. The small
 WebView direct-composition workaround and version-agnostic, exact-singleton
 PowerShell MSI cache discovery are ported into the locally hardened installer.
 
@@ -41,6 +41,46 @@ orchestration, offline cache enforcement, runtime evidence, and producer/consume
 boundary remain authoritative. Selective integration does not by itself claim a
 new prepared runtime is published; that requires the complete Wine 11 behavioral
 build and immutable tag workflow.
+
+## Chocolatey 2.7.4 candidate
+
+The Chocolatey package URL, SHA-256, installer download, saved-cache filename,
+runtime identity, and capability contract now select 2.7.4. Both the community
+feed and the upstream installer's package endpoint returned the same package
+SHA-256: `aec2dbd6ce91b7378eb4a0c21524e748d30332ea856e898404999f77328bd504`.
+Its package metadata identifies `chocolatey` version `2.7.4`, and its canonical
+executable remains `tools/chocolateyInstall/choco.exe`.
+
+Upstream release `v0.5e.765` advertises 2.7.4. Inspection of its checksum-verified
+installer confirms the 2.7.4 download target even though that tag's `installer.c`
+still names 2.6.0. This candidate updates the locally hardened installer directly;
+the upstream bootstrap archive stays pinned to `v0.5c.765`.
+
+The default configuration was checked against Chocolatey CLI tag `2.7.4`, source
+revision `37541d3b7e7b3079d69e70a0bfd70f302b808e4d`; CFW retains its explicit
+external PowerShell host policy. This is a candidate until the Wine 11 producer
+CI passes the complete PowerShell, Synchro, Chocolatey version, feature-policy,
+and local install/uninstall proofs. Publishing and consumer adoption require a
+new immutable runtime release; existing releases are unchanged.
+
+## Locked installer inputs
+
+`compat/runtime-inputs.json` is authoritative for both the prepared-runtime
+builder and the native installer's PowerShell/Chocolatey downloads and cache
+filenames. The installer no longer derives PowerShell's version from its own
+executable name; renaming a release executable does not change its dependencies.
+
+After changing those locked inputs, regenerate the checked-in native header:
+
+```bash
+python3 compat/runtime_inputs.py header > compat/installer-inputs.h
+python3 compat/runtime_inputs.py check-header
+```
+
+The release, compile, and runtime producer workflows reject a stale header before
+compilation. The same helper reads and validates builder lock values, including
+versions, digests, URLs, and cache filenames. Native process execution shares one
+implementation for exit-code propagation, handle cleanup, and bounded timeouts.
 
 ## Prepared runtime artifact
 
@@ -117,8 +157,9 @@ replace CFW’s profile loader, fragments, or Synchro wrappers.
 
 ## Package-host boundary
 
-Chocolatey 2.6.0 references legacy Windows PowerShell types while discovering
-its own command and rule types, even when its in-process PowerShell host is
+The prepared runtime retains the legacy Windows PowerShell type dependencies
+required by Chocolatey 2.6.0 while qualifying the 2.7.4 upgrade. Chocolatey discovers
+its own command and rule types even when its in-process PowerShell host is
 disabled. CFW therefore supplies the locked legacy type-dependency assembly set
 beside `choco.exe`. This satisfies CLR type discovery without making the
 in-process host part of the runtime contract.

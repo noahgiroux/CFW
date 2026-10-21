@@ -45,7 +45,7 @@
     }
   },
   "provides": {
-    "package-manager": "chocolatey-2.6.0",
+    "package-manager": "chocolatey-2.7.4",
     "package-execution-host": "external-windows-powershell",
     "windows-powershell-shim": "synchro-v4.2.0",
     "dotnet-runtime": "cfw-dotnet48",

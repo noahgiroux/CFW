@@ -2,21 +2,22 @@ name: Layer Contract
 
 on:
   push:
+    branches: [main]
     paths:
       - 'compat/**'
       - 'installer.c'
       - 'mainv1.c'
-      - 'tests/test_installer_contract.py'
-      - 'tests/test_layer_contract.py'
+      - 'tests/**'
       - '.github/workflows/layer-contract.yml'
   pull_request:
     paths:
       - 'compat/**'
       - 'installer.c'
       - 'mainv1.c'
-      - 'tests/test_installer_contract.py'
-      - 'tests/test_layer_contract.py'
+      - 'tests/**'
       - '.github/workflows/layer-contract.yml'
+
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -56,4 +57,4 @@ jobs:
 
       - name: Compile CFW installer
         run: |
-          x86_64-w64-mingw32-gcc -std=gnu11 -Wall -Wextra -municode -c installer.c -o /tmp/cfw-installer.o
+          bash compat/compile-installer.sh /tmp/cfw-installer.exe
