@@ -73,9 +73,6 @@ New-Item -ItemType Directory -Force -Path $profileRoot, $applicationProfileRoot 
 $requiredFragments = @(Get-CfwProfileFragments -ContractPath $ContractPath -FragmentSource $FragmentSource)
 foreach ($name in $requiredFragments) {
     $source = Join-Path $FragmentSource $name
-    if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
-        throw "prepared-runtime profile fragment is missing: $source"
-    }
     Copy-Item -LiteralPath $source -Destination (Join-Path $profileRoot $name) -Force
 }
 Get-CfwProfileFragments -ContractPath $ContractPath -FragmentSource $profileRoot | Out-Null

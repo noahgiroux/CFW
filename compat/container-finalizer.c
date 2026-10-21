@@ -98,8 +98,6 @@ static DWORD finalize_chocolatey(void) {
         result = GetLastError();
         if(result != ERROR_FILE_NOT_FOUND && result != ERROR_PATH_NOT_FOUND)
             return result;
-        result = require_directory(raw_root);
-        if(result != ERROR_SUCCESS) return result;
         log_stage("[cfw] stage=stage-create\n");
         result = move_chocolatey_tree(raw_root, stage_root, MOVEFILE_COPY_ALLOWED | MOVEFILE_WRITE_THROUGH);
         if(result != ERROR_SUCCESS) return result;
